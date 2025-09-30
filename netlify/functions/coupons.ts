@@ -42,7 +42,15 @@ const BANGGOOD_TTL_MS = 10 * 60 * 1000;  // 10 perc
 function etagOf(json: string) {
   return crypto.createHash("md5").update(json).digest("hex");
 }
-
+// képbetöltés
+function extractImageUrl(raw: any): string | undefined {
+  if (!raw) return undefined;
+  let s = String(raw).trim();
+  // =IMAGE("https://…", …) vagy IMAGE('…')
+  const m = s.match(/image\s*\(\s*["']([^"']+)["']/i);
+  if (m?.[1]) return m[1];
+  return s; // ha sima URL
+}
 // Pénz sztring robusztus parse: kezeli a szóközöket, NBSP-t, ,/. tizedest
 function parseMoney(v: any): number | undefined {
   if (v === null || v === undefined) return undefined;

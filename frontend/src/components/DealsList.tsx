@@ -22,6 +22,24 @@ function formatPrice(v?: number, cur?: string) {
   return `${sym}${v.toFixed(2)}`;
 }
 
+// Beépített SVG fallback – nincs több 404
+const FALLBACK_SVG =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 512 512'>
+      <defs>
+        <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+          <stop offset='0%' stop-color='#1f2937'/>
+          <stop offset='100%' stop-color='#111827'/>
+        </linearGradient>
+      </defs>
+      <rect width='512' height='512' fill='url(#g)'/>
+      <g fill='#9ca3af' font-family='system-ui,Segoe UI,Roboto,Ubuntu,Arial' text-anchor='middle'>
+        <text x='256' y='270' font-size='22'>no image</text>
+      </g>
+    </svg>`
+  );
+
 export function DealsList({ filters }: { filters: any }) {
   const [items, setItems] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,16 +96,15 @@ export function DealsList({ filters }: { filters: any }) {
       {items.map((d) => {
         const out = d.short || d.url;
 
-        // go redirect – pass-oljuk a forrást és a kuponkódot is (UTM funnelhez)
         const go =
           `/.netlify/functions/go?u=${encodeURIComponent(out)}` +
           `&src=${encodeURIComponent(d.src || "")}` +
           `&code=${encodeURIComponent(d.code || "")}`;
 
-        // PROXY-s kép URL (Akamai hotlink blokkolás ellen)
+        // PROXY-n át kérjük a képet; ha nincs image, induljunk az SVG fallbackkel
         const imgSrc = d.image
           ? `/.netlify/functions/img?u=${encodeURIComponent(d.image)}`
-          : "/icons/icon-512.png";
+          : FALLBACK_SVG;
 
         const price = formatPrice(d.price, d.cur);
         const orig = d.orig ? formatPrice(d.orig, d.cur) : "";
@@ -101,7 +118,6 @@ export function DealsList({ filters }: { filters: any }) {
             rel="noopener noreferrer nofollow ugc"
             className="block bg-neutral-900 rounded-lg p-3 hover:ring-2 ring-amber-400 transition"
           >
-            {/* Fix magasságú képkeret → nincs layout shift */}
             <div className="relative w-full h-40 mb-2">
               <img
                 src={imgSrc}
@@ -112,14 +128,14 @@ export function DealsList({ filters }: { filters: any }) {
                 draggable={false}
                 sizes="(min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
                 onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = "/icons/icon-512.png";
+                  const img = e.currentTarget as HTMLImageElement;
+                  img.onerror = null;           // 🔒 ne loopoljon
+                  img.src = FALLBACK_SVG;       // 🔁 biztos fallback
                 }}
               />
             </div>
 
-            <div className="mb-2 font-semibold text-white line-clamp-2">
-              {d.title}
-            </div>
+            <div className="mb-2 font-semibold text-white line-clamp-2">{d.title}</div>
 
             <div className="text-sm text-neutral-200">
               {price}

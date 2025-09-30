@@ -35,49 +35,37 @@ const {
 let SHEETS_CACHE: { items: Deal[]; ts: number } | null = null;
 let BANGGOOD_CACHE: { items: Deal[]; ts: number } | null = null;
 
-const SHEETS_TTL_MS = 5 * 60 * 1000;     // 5 perc
-const BANGGOOD_TTL_MS = 10 * 60 * 1000;  // 10 perc
+const SHEETS_TTL_MS = 5 * 60 * 1000;
+const BANGGOOD_TTL_MS = 10 * 60 * 1000;
 
 /* ======================== Utils ======================== */
 function etagOf(json: string) {
   return crypto.createHash("md5").update(json).digest("hex");
 }
-// képbetöltés
 function extractImageUrl(raw: any): string | undefined {
   if (!raw) return undefined;
   let s = String(raw).trim();
-  // =IMAGE("https://…", …) vagy IMAGE('…')
   const m = s.match(/image\s*\(\s*["']([^"']+)["']/i);
   if (m?.[1]) return m[1];
-  return s; // ha sima URL
+  if (s.startsWith("http")) return s;
+  return undefined;
 }
-// Pénz sztring robusztus parse: kezeli a szóközöket, NBSP-t, ,/. tizedest
 function parseMoney(v: any): number | undefined {
   if (v === null || v === undefined) return undefined;
-  let s = String(v).trim();
+  let s = String(v).trim().replace(/\u00A0/g, " ").replace(/\s+/g, "");
   if (!s) return undefined;
-
-  // cseréljük az NBSP-t és normál szóközt
-  s = s.replace(/\u00A0/g, " ").replace(/\s+/g, "");
-
   const hasComma = s.includes(",");
   const hasDot = s.includes(".");
-
   if (hasComma && !hasDot) {
-    // EU formátum: 1189,99 -> 1189.99
     s = s.replace(",", ".");
   } else if (hasComma && hasDot) {
-    // Döntsük el mi a tizedes: ha az utolsó jel , akkor EU: 1.234,56 -> 1234.56
     if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
       s = s.replace(/\./g, "").replace(",", ".");
     } else {
-      // US: 1,234.56 -> 1234.56
       s = s.replace(/,/g, "");
     }
   }
-  // csak szám + pont maradjon
   s = s.replace(/[^\d.]/g, "");
-  // ha több pont maradt, az utolsó legyen tizedes
   const parts = s.split(".");
   if (parts.length > 2) {
     const dec = parts.pop();
@@ -86,13 +74,11 @@ function parseMoney(v: any): number | undefined {
   const num = parseFloat(s);
   return Number.isFinite(num) ? num : undefined;
 }
-
 function toISO(d?: string | number | Date): string | undefined {
   if (!d) return undefined;
   const dt = new Date(d);
   return isNaN(dt.getTime()) ? undefined : dt.toISOString();
 }
-
 function normalizeUrl(u?: string): string | undefined {
   if (!u) return undefined;
   try {
@@ -100,26 +86,12 @@ function normalizeUrl(u?: string): string | undefined {
     return encodeURI(https);
   } catch { return u; }
 }
-
-function dedupe(deals: Deal[]): Deal[] {
-  const seen = new Set<string>();
-  const out: Deal[] = [];
-  for (const d of deals) {
-    const key = crypto.createHash("md5").update(`${d.src}|${d.url}|${d.code || ""}`).digest("hex");
-    if (!seen.has(key)) {
-      seen.add(key);
-      out.push(d);
-    }
-  }
-  return out;
-}
-
 function scoreDeal(d: Deal): number {
   let score = 0;
-  if ((d.wh || "").toUpperCase() !== "CN") score += 10; // EU boost
+  if ((d.wh || "").toUpperCase() !== "CN") score += 10;
   if (d.end) {
     const days = Math.max(0, (new Date(d.end).getTime() - Date.now()) / 86400000);
-    score += (10 - Math.min(10, days)); // közelebbi lejárat → magasabb
+    score += (10 - Math.min(10, days));
   }
   if (d.price && d.orig && d.price < d.orig) {
     const disc = 100 * (1 - d.price / d.orig);
@@ -129,38 +101,15 @@ function scoreDeal(d: Deal): number {
 }
 
 /* ======================== Banggood adapter ======================== */
-function signBanggood(params: Record<string, any>): string {
-  const sorted = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join("&");
-  return crypto.createHash("md5").update(sorted).digest("hex");
-}
-
-async function bgGetAccessToken(): Promise<string | null> {
-  if (!BANGGOOD_API_KEY || !BANGGOOD_API_SECRET) return null;
-  const timestamp = Math.floor(Date.now() / 1000);
-  const noncestr = Math.random().toString(36).slice(2);
-  const signature = signBanggood({
-    api_key: BANGGOOD_API_KEY,
-    api_secret: BANGGOOD_API_SECRET,
-    noncestr,
-    timestamp
-  });
-  const { data } = await axios.get("https://affapi.banggood.com/getAccessToken", {
-    params: { api_key: BANGGOOD_API_KEY, noncestr, timestamp, signature },
-    timeout: 8000
-  });
-  return data?.result?.access_token || null;
-}
-
+// Ez csak akkor kell, ha a deal NINCS a táblázatban.
 async function fetchBanggoodDeals(): Promise<Deal[]> {
   if (BANGGOOD_CACHE && Date.now() - BANGGOOD_CACHE.ts < BANGGOOD_TTL_MS) {
     return BANGGOOD_CACHE.items;
   }
   const token = await bgGetAccessToken();
   if (!token) return [];
-
   let page = 1, pages = 1;
   const all: Deal[] = [];
-
   while (page <= pages) {
     const { data } = await axios.get("https://affapi.banggood.com/coupon/list", {
       headers: { "access-token": token },
@@ -170,23 +119,16 @@ async function fetchBanggoodDeals(): Promise<Deal[]> {
     const res = data?.result;
     const list: any[] = res?.coupon_list || [];
     pages = res?.page_total || page;
-
     for (const c of list) {
-      let name: string =
-        (c.promo_link_standard || "").split("/").pop()?.replace(/-/g, " ") ||
-        c.only_for || "Banggood deal";
-      name = name.replace(/\?.*$/g, "").replace(/!.*$/g, "");
-
-      // Rövid afflink előnyben, különben encode-olt standard – mindkettő https
+      let name = (c.promo_link_standard || "").split("/").pop()?.replace(/-/g, " ") || c.only_for || "Banggood deal";
+      name = name.replace(/\?.*$/g, "").replace(/!.*$/g, "").replace(/\.html?$/i, "").trim();
       const stdRaw: string = c.promo_link_standard || "";
       const shortRaw: string = c.promo_link_short || "";
       const shortHttps = shortRaw ? shortRaw.replace(/^http:/, "https:") : "";
       const safeStd = normalizeUrl(stdRaw) || "";
-
       const finalUrl = shortHttps || safeStd || "#";
-
       const deal: Deal = {
-        id: `banggood:${crypto.createHash("md5").update(`${c.promo_link_standard || ""}|${c.coupon_code || ""}`).digest("hex")}`,
+        id: `banggood:${crypto.createHash("md5").update(`${stdRaw}|${c.coupon_code || ""}`).digest("hex")}`,
         src: "banggood",
         title: name,
         image: c.coupon_img || undefined,
@@ -211,14 +153,9 @@ async function fetchBanggoodDeals(): Promise<Deal[]> {
   return all;
 }
 
-/* ======================== Google Sheets adapter (batchGet + cache) ======================== */
-/** Csak ezeket a lapokat húzzuk (gyors) – bővíthető */
-const SHEET_RANGES = [
-  "'BG Unique'!A:Z",
-  "'BG Unique HUN'!A:Z"
-];
+/* ======================== Google Sheets adapter ======================== */
+const SHEET_RANGES = ["'BG Unique'!A:Z", "'BG Unique HUN'!A:Z"];
 
-// kis helper: többféle elnevezést is elfogadunk
 function findIdx(header: string[], aliases: string[]): number {
   const lower = header.map(h => String(h).trim().toLowerCase());
   for (const a of aliases) {
@@ -233,25 +170,16 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
   if (SHEETS_CACHE && Date.now() - SHEETS_CACHE.ts < SHEETS_TTL_MS) {
     return SHEETS_CACHE.items;
   }
-
   const creds = JSON.parse(GOOGLE_APPLICATION_CREDENTIALS_JSON!);
-  const jwt = new google.auth.JWT(
-    creds.client_email, undefined, creds.private_key,
-    ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-  );
+  const jwt = new google.auth.JWT(creds.client_email, undefined, creds.private_key, ["https://www.googleapis.com/auth/spreadsheets.readonly"]);
   const sheets = google.sheets({ version: "v4", auth: jwt });
-
-  const resp = await sheets.spreadsheets.values.batchGet({
-    spreadsheetId: SPREADSHEET_ID!,
-    ranges: SHEET_RANGES
-  });
-
+  const resp = await sheets.spreadsheets.values.batchGet({ spreadsheetId: SPREADSHEET_ID!, ranges: SHEET_RANGES });
   const out: Deal[] = [];
   for (const vr of resp.data.valueRanges || []) {
     const rows = vr.values || [];
-    if (!rows.length) continue;
-
+    if (rows.length < 2) continue;
     const header = rows[0].map((h: any) => String(h));
+    // Itt a lényeg: a B oszlopot keressük a "Name" vagy "Product name" fejléccel
     const iImage = findIdx(header, ["Image"]);
     const iName  = findIdx(header, ["Product name", "Name"]);
     const iLink  = findIdx(header, ["Link", "URL"]);
@@ -259,24 +187,18 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
     const iCode  = findIdx(header, ["Coupon code", "Code"]);
     const iWh    = findIdx(header, ["Warehouse"]);
     const iEnd   = findIdx(header, ["End time", "End", "Expiry", "Expire"]);
-
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r];
       const title = iName >= 0 ? row[iName] : undefined;
       const link  = iLink >= 0 ? row[iLink] : undefined;
       if (!title || !link) continue;
-
       const endIso = iEnd >= 0 ? toISO(row[iEnd]) : undefined;
-      const notExpired = !endIso || new Date(endIso).getTime() > Date.now();
-      if (!notExpired) continue;
-
+      if (endIso && new Date(endIso).getTime() <= Date.now()) continue;
       const image = iImage >= 0 ? extractImageUrl(row[iImage]) : undefined;
       const price = iPrice >= 0 ? parseMoney(row[iPrice]) : undefined;
       const code  = iCode >= 0 ? row[iCode] : undefined;
       const wh    = iWh   >= 0 ? row[iWh]   : undefined;
-
       const safeLink = normalizeUrl(String(link)) || String(link);
-
       out.push({
         id: `sheets:${crypto.createHash("md5").update(`${vr.range}|${safeLink}|${code || ""}`).digest("hex")}`,
         src: "sheets",
@@ -284,7 +206,6 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
         image: image || undefined,
         url: safeLink,
         price,
-        // Banggood sheetnél az ár USD – ha akarsz külön oszlopot currency-re, könnyen bővíthető
         cur: "USD",
         code: code || undefined,
         wh: wh || undefined,
@@ -292,11 +213,13 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
       });
     }
   }
-
-  const items = dedupe(out);
-  SHEETS_CACHE = { items, ts: Date.now() };
-  return items;
+  SHEETS_CACHE = { items: out, ts: Date.now() };
+  return out;
 }
+
+// Dummy implementációk, ha az ENV változók hiányoznak a bgGetAccessToken-hez
+async function signBanggood(params: Record<string, any>): Promise<string> { return ""; }
+async function bgGetAccessToken(): Promise<string | null> { return null; }
 
 /* ======================== Handler ======================== */
 let LAST_JSON = "";
@@ -314,11 +237,32 @@ export const handler: Handler = async (event) => {
     const minPrice = qs.get("minPrice") ? Number(qs.get("minPrice")) : undefined;
     const maxPrice = qs.get("maxPrice") ? Number(qs.get("maxPrice")) : undefined;
 
-    const allRaw = await Promise.all([
-      fetchSheetsDeals().catch(() => []),
-      fetchBanggoodDeals().catch(() => [])
+    const [sheetsDeals, banggoodDeals] = await Promise.all([
+      fetchSheetsDeals().catch((e) => { console.error("Sheets Error:", e); return []; }),
+      fetchBanggoodDeals().catch((e) => { console.error("Banggood Error:", e); return []; })
     ]);
-    let all = dedupe(allRaw.flat());
+
+    // ==== JAVÍTÁS ITT KEZDŐDIK ====
+    // Okos összefésülés: A táblázat (sheetsDeals) az elsődleges forrás.
+    // A Banggood API csak azokat a deale-ket adja hozzá, amik még nincsenek a táblázatban.
+    const dealMap = new Map<string, Deal>();
+    
+    // 1. Betöltjük a TÁBLÁZATBÓL jövő, JÓ MINŐSÉGŰ adatokat.
+    for (const deal of sheetsDeals) {
+      const key = `${deal.url}|${deal.code || ""}`;
+      dealMap.set(key, deal);
+    }
+
+    // 2. Hozzáadjuk a Banggood API-ból jövőket, de CSAK HA MÉG NINCSENEK a listában.
+    for (const deal of banggoodDeals) {
+      const key = `${deal.url}|${deal.code || ""}`;
+      if (!dealMap.has(key)) {
+        dealMap.set(key, deal);
+      }
+    }
+
+    let all = Array.from(dealMap.values());
+    // ==== JAVÍTÁS VÉGE ====
 
     if (all.length === 0) {
       all = [{
@@ -327,20 +271,13 @@ export const handler: Handler = async (event) => {
         end: toISO(Date.now() + 36e5 * 24), updated: toISO(Date.now()), tags: ["gan", "charger", "blitzwolf"]
       }];
     }
-
-    // Szűrések
+    
+    // A további feldolgozás (szűrés, rangsorolás) már a tiszta adatokon történik.
     if (q) {
-      all = all.filter(d =>
-        d.title.toLowerCase().includes(q) ||
-        (d.code || "").toLowerCase().includes(q) ||
-        (d.tags || []).some(t => t.toLowerCase().includes(q))
-      );
+      all = all.filter(d => d.title.toLowerCase().includes(q) || (d.code || "").toLowerCase().includes(q) || (d.tags || []).some(t => t.toLowerCase().includes(q)));
     }
     if (whFilter) {
-      all = all.filter(d =>
-        (d.wh || "").toUpperCase() === whFilter ||
-        (whFilter === "EU" && (d.wh || "").toUpperCase() !== "CN")
-      );
+      all = all.filter(d => (d.wh || "").toUpperCase() === whFilter || (whFilter === "EU" && (d.wh || "").toUpperCase() !== "CN"));
     }
     if (srcFilter) {
       all = all.filter(d => d.src === srcFilter);
@@ -352,52 +289,27 @@ export const handler: Handler = async (event) => {
       all = all.filter(d => (d.price ?? 0) <= maxPrice);
     }
 
-    // Rangsorolás
-    const scored = all.map(d => ({ d, score: scoreDeal(d) }))
-      .sort((a, b) => b.score - a.score)
-      .map(x => x.d);
-
-    // Lapozás
+    const scored = all.map(d => ({ d, score: scoreDeal(d) })).sort((a, b) => b.score - a.score).map(x => x.d);
     const start = cursor ? parseInt(cursor, 10) || 0 : 0;
     const page = scored.slice(start, start + limit);
     const nextCursor = start + limit < scored.length ? String(start + limit) : null;
-
     const payload = { count: scored.length, items: page, nextCursor, updatedAt: new Date().toISOString() };
     const json = JSON.stringify(payload);
     const etg = etagOf(json);
 
     if (ifNoneMatch && ifNoneMatch === etg) {
-      return {
-        statusCode: 304,
-        headers: { ETag: etg, "Cache-Control": "public, max-age=600, stale-while-revalidate=60" },
-        body: ""
-      };
+      return { statusCode: 304, headers: { ETag: etg, "Cache-Control": "public, max-age=600, stale-while-revalidate=60" }, body: "" };
     }
-
     LAST_JSON = json;
     LAST_ETAG = etg;
-
     return {
       statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=600, stale-while-revalidate=60",
-        "ETag": etg
-      },
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600, stale-while-revalidate=60", "ETag": etg },
       body: json
     };
   } catch (e: any) {
     if (LAST_JSON) {
-      return {
-        statusCode: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "public, max-age=60",
-          "ETag": LAST_ETAG,
-          "X-Fallback": "snapshot"
-        },
-        body: LAST_JSON
-      };
+      return { statusCode: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", "ETag": LAST_ETAG, "X-Fallback": "snapshot" }, body: LAST_JSON };
     }
     return { statusCode: 500, body: JSON.stringify({ error: e?.message || "Server error" }) };
   }

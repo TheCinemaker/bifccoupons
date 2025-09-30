@@ -1,8 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import crypto from "crypto";
 import axios from "axios";
-import { GoogleAuth } from "google-auth-library";
-import { GoogleSpreadsheet } from "google-spreadsheet";
+import { google } from "googleapis";
 
 // ===== Canonical típus =====
 type Deal = {
@@ -31,6 +30,13 @@ const {
   BANGGOOD_API_KEY,
   BANGGOOD_API_SECRET,
 } = process.env;
+
+// --- Cache-k (memória) ---
+let SHEETS_CACHE: { items: Deal[]; ts: number } | null = null;
+let BANGGOOD_CACHE: { items: Deal[]; ts: number } | null = null;
+
+const SHEETS_TTL_MS = 5 * 60 * 1000;   // 5 perc
+const BANGGOOD_TTL_MS = 10 * 60 * 1000; // 10 perc
 
 // ===== Util =====
 function etagOf(json: string) {
@@ -74,7 +80,6 @@ function scoreDeal(d: Deal): number {
 
 // ===== Banggood adapter =====
 function signBanggood(params: Record<string, any>): string {
-  // A Banggood minta szerint: abc-sorrend + api_secret is benne → md5
   const sorted = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join("&");
   return crypto.createHash("md5").update(sorted).digest("hex");
 }
@@ -93,11 +98,13 @@ async function bgGetAccessToken(): Promise<string | null> {
     params: { api_key: BANGGOOD_API_KEY, noncestr, timestamp, signature },
     timeout: 8000
   });
-  const token = data?.result?.access_token;
-  return token || null;
+  return data?.result?.access_token || null;
 }
 
 async function fetchBanggoodDeals(): Promise<Deal[]> {
+  if (BANGGOOD_CACHE && Date.now() - BANGGOOD_CACHE.ts < BANGGOOD_TTL_MS) {
+    return BANGGOOD_CACHE.items;
+  }
   const token = await bgGetAccessToken();
   if (!token) return [];
   let page = 1, pages = 1;
@@ -114,94 +121,115 @@ async function fetchBanggoodDeals(): Promise<Deal[]> {
     pages = res?.page_total || page;
 
     for (const c of list) {
-      // terméknév linkből
       let name: string = (c.promo_link_standard || "").split("/").pop()?.replace(/-/g, " ") || c.only_for || "Banggood deal";
       name = name.replace(/\?.*$/g, "").replace(/!.*$/g, "");
-      const stdRaw = c.promo_link_standard || "";
-const shortRaw = c.promo_link_short || "";
-const stdHttps = stdRaw.replace(/^http:/, "https:");
-const shortHttps = shortRaw.replace(/^http:/, "https:");
-const safeStd = stdHttps ? encodeURI(stdHttps) : "";
-
-// végső link
-const finalUrl = shortHttps || safeStd;
-
-const deal: Deal = {
-  id: `banggood:${crypto.createHash("md5").update(`${c.promo_link_standard || ""}|${c.coupon_code || ""}`).digest("hex")}`,
-  src: "banggood",
-  title: name,
-  image: c.coupon_img || undefined,
-  url: finalUrl,                  // ← EZ lesz a kártya linkje
-  short: shortHttps || undefined, // rövid link külön mezőben is
-  price: parseMoney(c.condition) ?? parseMoney(c.original_price),
-  orig: parseMoney(c.original_price),
-  cur: c.currency || "USD",
-  code: c.coupon_code || undefined,
-  wh: c.warehouse || undefined,
-  start: toISO(c.coupon_date_start),
-  end: toISO(c.coupon_date_end),
-  updated: toISO(Date.now()),
-  tags: [],
-  residual: c.coupon_residual ? Number(c.coupon_residual) : undefined
-};
+      const deal: Deal = {
+        id: `banggood:${crypto.createHash("md5").update(`${c.promo_link_standard || ""}|${c.coupon_code || ""}`).digest("hex")}`,
+        src: "banggood",
+        title: name,
+        image: c.coupon_img || undefined,
+        url: c.promo_link_standard || c.promo_link_short || "#",
+        short: c.promo_link_short || undefined,
+        price: parseMoney(c.condition) ?? parseMoney(c.original_price),
+        orig: parseMoney(c.original_price),
+        cur: c.currency || "USD",
+        code: c.coupon_code || undefined,
+        wh: c.warehouse || undefined,
+        start: toISO(c.coupon_date_start),
+        end: toISO(c.coupon_date_end),
+        updated: toISO(Date.now()),
+        tags: [],
+        residual: c.coupon_residual ? Number(c.coupon_residual) : undefined
+      };
       all.push(deal);
     }
     page++;
   }
+  BANGGOOD_CACHE = { items: all, ts: Date.now() };
   return all;
 }
 
-// ===== Google Sheets adapter =====
-// Vár egy táblázatot, kb. ilyen oszlopokkal (rugalmasan kezeljük az indexet):
-// [ image, name, productId, link, originalPrice, discount, price, code, quantity, warehouse, categories, startTime, endTime, updateTime ]
+// ===== Google Sheets adapter (TURBO) =====
+const SHEET_RANGES = [
+  "'BG Unique'!A:N",
+  "'BG Unique HUN'!A:N"
+];
+
 async function fetchSheetsDeals(): Promise<Deal[]> {
   if (!SPREADSHEET_ID || !GOOGLE_APPLICATION_CREDENTIALS_JSON) return [];
-  const auth = new GoogleAuth({
-    credentials: JSON.parse(GOOGLE_APPLICATION_CREDENTIALS_JSON),
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-  });
-  const client = await auth.getClient();
-  const doc = new GoogleSpreadsheet(SPREADSHEET_ID, client);
-  await doc.loadInfo();
+  if (SHEETS_CACHE && Date.now() - SHEETS_CACHE.ts < SHEETS_TTL_MS) {
+    return SHEETS_CACHE.items;
+  }
 
-  const sheetNames = [
-    "BG Unique", "BG Unique HUN", "BG ALL Coupons",
-    "Geekbuying", "Geekbuying Unique"
-  
-  ].filter(n => !!doc.sheetsByTitle[n]);
+  const creds = JSON.parse(GOOGLE_APPLICATION_CREDENTIALS_JSON!);
+  const jwt = new google.auth.JWT(
+    creds.client_email, undefined, creds.private_key,
+    ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+  );
+  const sheets = google.sheets({ version: "v4", auth: jwt });
+
+  const resp = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId: SPREADSHEET_ID!,
+    ranges: SHEET_RANGES
+  });
 
   const out: Deal[] = [];
-  for (const name of sheetNames) {
-    const sheet = doc.sheetsByTitle[name];
-    const rows = await sheet.getRows();
-    for (const r of rows) {
-      const d = r._rawData || [];
-      const image = d[0]; const title = d[1]; const link = d[3];
-      const orig = parseMoney(d[4]); const discount = d[5];
-      const price = parseMoney(d[6]); const code = d[7];
-      const wh = d[9]; const cats = (d[10] || "").toString().split(",").map((s: string) => s.trim()).filter(Boolean);
-      const start = toISO(d[11]); const end = toISO(d[12]); const upd = toISO(d[13]);
+  for (const vr of resp.data.valueRanges || []) {
+    const rows = vr.values || [];
+    if (!rows.length) continue;
 
+    const header = rows[0].map((h: any) => String(h).trim().toLowerCase());
+    const idx = (name: string) => header.indexOf(name);
+
+    const iImage = idx("image");
+    const iName = idx("name");
+    const iLink = idx("link");
+    const iOrig = idx("original price");
+    const iPrice = idx("price");
+    const iCode = idx("code");
+    const iWh = idx("warehouse");
+    const iCats = idx("categories");
+    const iStart = idx("start time");
+    const iEnd = idx("end time");
+    const iUpd = idx("update time");
+
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      const title = iName >= 0 ? row[iName] : undefined;
+      const link = iLink >= 0 ? row[iLink] : undefined;
       if (!title || !link) continue;
+
+      const end = iEnd >= 0 ? toISO(row[iEnd]) : undefined;
+      const notExpired = !end || new Date(end).getTime() > Date.now();
+      if (!notExpired) continue;
+
+      const image = iImage >= 0 ? row[iImage] : undefined;
+      const orig = iOrig >= 0 ? parseMoney(row[iOrig]) : undefined;
+      const price = iPrice >= 0 ? parseMoney(row[iPrice]) : undefined;
+      const code = iCode >= 0 ? row[iCode] : undefined;
+      const wh = iWh >= 0 ? row[iWh] : undefined;
+      const cats = iCats >= 0 && row[iCats] ? String(row[iCats]).split(",").map((s: string) => s.trim()).filter(Boolean) : [];
+      const start = iStart >= 0 ? toISO(row[iStart]) : undefined;
+      const upd = iUpd >= 0 ? toISO(row[iUpd]) : undefined;
+
       out.push({
-        id: `sheets:${crypto.createHash("md5").update(`${name}|${link}|${code || ""}`).digest("hex")}`,
+        id: `sheets:${crypto.createHash("md5").update(`${vr.range}|${link}|${code || ""}`).digest("hex")}`,
         src: "sheets",
         title: String(title),
         image: image || undefined,
         url: String(link),
-        price: price,
-        orig: orig,
-        cur: "USD",
+        price, orig, cur: "USD",
         code: code || undefined,
         wh: wh || undefined,
-        start,
-        end,
-        updated: upd,
+        start, end, updated: upd,
         tags: cats
       });
     }
   }
-  return out;
+
+  const items = dedupe(out);
+  SHEETS_CACHE = { items, ts: Date.now() };
+  return items;
 }
 
 // ===== Fő handler =====
@@ -220,32 +248,21 @@ export const handler: Handler = async (event) => {
     const minPrice = qs.get("minPrice") ? Number(qs.get("minPrice")) : undefined;
     const maxPrice = qs.get("maxPrice") ? Number(qs.get("maxPrice")) : undefined;
 
-    // 1) Források begyűjtése (ENV-től függően)
-    const promises: Promise<Deal[]>[] = [];
-    promises.push(fetchSheetsDeals().catch(() => []));
-    promises.push(fetchBanggoodDeals().catch(() => []));
+    const promises: Promise<Deal[]>[] = [
+      fetchSheetsDeals().catch(() => []),
+      fetchBanggoodDeals().catch(() => [])
+    ];
     const allRaw = await Promise.all(promises);
     let all = dedupe(allRaw.flat());
 
-    // Ha semmi nem jött (nincs ENV), adjunk legalább egy demót
     if (all.length === 0) {
       all = [{
-        id: "demo-1",
-        src: "sheets",
-        title: "BlitzWolf BW-XYZ 65W GaN töltő",
-        url: "https://example.com",
-        price: 39.99,
-        orig: 59.99,
-        cur: "USD",
-        code: "BGDEMO",
-        wh: "EU",
-        end: toISO(Date.now() + 36e5 * 24),
-        updated: toISO(Date.now()),
-        tags: ["gan", "charger", "blitzwolf"]
+        id: "demo-1", src: "sheets", title: "BlitzWolf BW-XYZ 65W GaN töltő", url: "https://example.com",
+        price: 39.99, orig: 59.99, cur: "USD", code: "BGDEMO", wh: "EU",
+        end: toISO(Date.now() + 36e5 * 24), updated: toISO(Date.now()), tags: ["gan", "charger", "blitzwolf"]
       }];
     }
 
-    // 2) Szűrés
     if (q) {
       all = all.filter(d =>
         d.title.toLowerCase().includes(q) ||
@@ -266,12 +283,10 @@ export const handler: Handler = async (event) => {
       all = all.filter(d => (d.price ?? 0) <= maxPrice);
     }
 
-    // 3) Rangsorolás
     const scored = all.map(d => ({ d, score: scoreDeal(d) }))
       .sort((a, b) => b.score - a.score)
       .map(x => x.d);
 
-    // 4) Paginálás
     const start = cursor ? parseInt(cursor, 10) || 0 : 0;
     const page = scored.slice(start, start + limit);
     const nextCursor = start + limit < scored.length ? String(start + limit) : null;
@@ -289,15 +304,10 @@ export const handler: Handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=600, stale-while-revalidate=60",
-        "ETag": etg
-      },
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600, stale-while-revalidate=60", "ETag": etg },
       body: json
     };
   } catch (e: any) {
-    // Snapshot fallback
     if (LAST_JSON) {
       return {
         statusCode: 200,

@@ -216,8 +216,9 @@ async function fetchBanggoodDeals(): Promise<Deal[]> {
 
 /* ======================== Google Sheets adapter ======================== */
 const SHEET_RANGES = [
-  "'BG Unique'!A:Z",
-  "'BG Unique HUN'!A:Z",
+  /* "'BG Unique'!A:Z",
+  "'BG Unique HUN'!A:Z", */
+  "'Geekbuying'!A:Z500",
 ];
 
 function findIdx(header: string[], aliases: string[]): number {

@@ -98,7 +98,7 @@ async function fetchBanggoodDeals(): Promise<Deal[]> {
 }
 
 /* ======================== Google Sheets adapter (JAVÍTOTT) ======================== */
-const SHEET_RANGES = ["'BG Unique'!A:Z", "'BG Unique HUN'!A:Z"];
+const SHEET_RANGES = ["'BG Unique'!A:Z", "'BG Unique HUN'!A:Z500"];
 function findIdx(header: string[], aliases: string[]): number {
   const lower = header.map(h => String(h).trim().toLowerCase());
   for (const a of aliases) { const i = lower.indexOf(a.toLowerCase()); if (i !== -1) return i; }

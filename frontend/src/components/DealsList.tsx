@@ -43,9 +43,7 @@ export function DealsList({ filters }: { filters: any }) {
       })
       .catch(() => setLoading(false));
 
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [JSON.stringify(filters)]);
 
   async function copyCode(e: React.MouseEvent, deal: Deal) {
@@ -58,46 +56,66 @@ export function DealsList({ filters }: { filters: any }) {
     } catch {}
   }
 
-  if (loading) return <div className="p-4 text-neutral-400">Betöltés…</div>;
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="bg-neutral-900 rounded-lg p-3">
+            <div className="w-full h-40 rounded-md mb-2 bg-neutral-800 animate-pulse" />
+            <div className="h-4 w-3/4 bg-neutral-800 rounded mb-2 animate-pulse" />
+            <div className="h-3 w-1/2 bg-neutral-800 rounded mb-1 animate-pulse" />
+            <div className="h-3 w-1/3 bg-neutral-800 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (!items.length) return <div className="p-4 text-neutral-400">Nincs találat.</div>;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-3">
       {items.map((d) => {
         const out = d.short || d.url;
-        const go = `/.netlify/functions/go?u=${encodeURIComponent(out)}`;
+
+        // go redirect – pass-oljuk a forrást és a kuponkódot is (UTM funnelhez)
+        const go =
+          `/.netlify/functions/go?u=${encodeURIComponent(out)}` +
+          `&src=${encodeURIComponent(d.src || "")}` +
+          `&code=${encodeURIComponent(d.code || "")}`;
+
+        // PROXY-s kép URL (Akamai hotlink blokkolás ellen)
+        const imgSrc = d.image
+          ? `/.netlify/functions/img?u=${encodeURIComponent(d.image)}`
+          : "/icons/icon-512.png";
+
         const price = formatPrice(d.price, d.cur);
         const orig = d.orig ? formatPrice(d.orig, d.cur) : "";
         const ends = d.end ? `lejár: ${new Date(d.end).toLocaleDateString("hu-HU")}` : "";
-
-        // ================= JAVÍTÁS ITT =================
-        // A változót a return előtt, a map cikluson belül hozzuk létre.
-        // Ha van kép URL, akkor elkészítjük a proxy URL-t, egyébként null lesz.
-        const imgSrc = d.image ? `/.netlify/functions/img?u=${encodeURIComponent(d.image)}` : null;
-        // ================= JAVÍTÁS VÉGE =================
 
         return (
           <a
             key={d.id}
             href={go}
             target="_blank"
-            rel="noopener noreferrer"
+            rel="noopener noreferrer nofollow ugc"
             className="block bg-neutral-900 rounded-lg p-3 hover:ring-2 ring-amber-400 transition"
           >
-            {/* 
-              Itt már csak egy egyszerű feltételt használunk:
-              Ha az imgSrc nem null, akkor jelenítsd meg a képet.
-              Ez a kód szintaktikailag HELYES.
-            */}
-            {imgSrc && (
+            {/* Fix magasságú képkeret → nincs layout shift */}
+            <div className="relative w-full h-40 mb-2">
               <img
                 src={imgSrc}
-                alt={d.title} // A title-t érdemes beletenni az alt tagbe
-                className="w-full h-40 object-cover rounded-md mb-2 bg-neutral-800"
+                alt={d.title}
+                className="absolute inset-0 w-full h-full object-cover rounded-md bg-neutral-800"
                 loading="lazy"
                 decoding="async"
+                draggable={false}
+                sizes="(min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = "/icons/icon-512.png";
+                }}
               />
-            )}
+            </div>
 
             <div className="mb-2 font-semibold text-white line-clamp-2">
               {d.title}
@@ -127,9 +145,7 @@ export function DealsList({ filters }: { filters: any }) {
                 </button>
               </div>
             ) : (
-              <div className="mt-3 text-xs text-neutral-400">
-                Nincs kuponkód – akciós ár
-              </div>
+              <div className="mt-3 text-xs text-neutral-400">Nincs kuponkód – akciós ár</div>
             )}
           </a>
         );

@@ -270,7 +270,7 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
       const notExpired = !endIso || new Date(endIso).getTime() > Date.now();
       if (!notExpired) continue;
 
-      const image = iImage >= 0 ? row[iImage] : undefined;
+      const image = iImage >= 0 ? extractImageUrl(row[iImage]) : undefined;
       const price = iPrice >= 0 ? parseMoney(row[iPrice]) : undefined;
       const code  = iCode >= 0 ? row[iCode] : undefined;
       const wh    = iWh   >= 0 ? row[iWh]   : undefined;

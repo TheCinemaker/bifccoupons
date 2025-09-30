@@ -85,11 +85,14 @@ export function DealsList({ filters }: { filters: any }) {
           >
             {d.image ? (
               <img
-                src={d.image}
-                alt=""
-                className="w-full h-40 object-cover rounded-md mb-2 bg-neutral-800"
-                loading="lazy"
-              />
+  src={d.image}
+  alt=""
+  className="w-full h-40 object-cover rounded-md mb-2 bg-neutral-800"
+  loading="lazy"
+  decoding="async"
+  referrerPolicy="no-referrer"
+  onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/icons/icon-512.png"; }}
+/>
             ) : null}
 
             <div className="mb-2 font-semibold text-white line-clamp-2">

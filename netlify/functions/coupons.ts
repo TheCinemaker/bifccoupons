@@ -181,45 +181,69 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
   if (SHEETS_CACHE && Date.now() - SHEETS_CACHE.ts < SHEETS_TTL_MS) {
     return SHEETS_CACHE.items;
   }
+
   const creds = JSON.parse(GOOGLE_APPLICATION_CREDENTIALS_JSON!);
-  const jwt = new google.auth.JWT(creds.client_email, undefined, creds.private_key, ["https://www.googleapis.com/auth/spreadsheets.readonly"]);
+  const jwt = new google.auth.JWT(
+    creds.client_email, undefined, creds.private_key,
+    ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+  );
   const sheets = google.sheets({ version: "v4", auth: jwt });
-  const resp = await sheets.spreadsheets.values.batchGet({ spreadsheetId: SPREADSHEET_ID!, ranges: SHEET_RANGES });
+
+  const resp = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId: SPREADSHEET_ID!,
+    ranges: SHEET_RANGES
+  });
+
+  console.log("Sikeresen lekérdezve a Google Sheets API."); // DEBUG LOG
+
   const out: Deal[] = [];
   for (const vr of resp.data.valueRanges || []) {
     const rows = vr.values || [];
     if (rows.length < 2) continue;
-    const header = rows[0].map((h: any) => String(h));
-    // Itt a lényeg: a B oszlopot keressük a "Name" vagy "Product name" fejléccel
-    const iImage = findIdx(header, ["Image"]);
-    const iName  = findIdx(header, ["Product name", "Name"]);
-    const iLink  = findIdx(header, ["Link", "URL"]);
-    const iPrice = findIdx(header, ["Coupon price", "Price"]);
-    const iCode  = findIdx(header, ["Coupon code", "Code"]);
-    const iWh    = findIdx(header, ["Warehouse"]);
-    const iEnd   = findIdx(header, ["End time", "End", "Expiry", "Expire"]);
+
+    const header = rows[0].map((h: any) => String(h).trim()); // trim() a biztonság kedvéért
+    console.log(`Feldolgozott munkalap: ${vr.range}, Fejléc: [${header.join(", ")}]`); // DEBUG LOG
+
+    // Szigorúbb fejléc keresés, kis- és nagybetű érzéketlen
+    const iImage = header.findIndex(h => h.toLowerCase() === "image");
+    const iName  = header.findIndex(h => ["product name", "name"].includes(h.toLowerCase()));
+    const iLink  = header.findIndex(h => ["link", "url"].includes(h.toLowerCase()));
+    const iPrice = header.findIndex(h => ["coupon price", "price"].includes(h.toLowerCase()));
+    const iCode  = header.findIndex(h => ["coupon code", "code"].includes(h.toLowerCase()));
+    const iWh    = header.findIndex(h => h.toLowerCase() === "warehouse");
+    const iEnd   = header.findIndex(h => ["end time", "end", "expiry", "expire"].includes(h.toLowerCase()));
+
+    console.log(`Oszlop indexek - Kép: ${iImage}, Név: ${iName}, Link: ${iLink}`); // DEBUG LOG
+
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r];
-      const title = iName >= 0 ? row[iName] : undefined;
-      const link  = iLink >= 0 ? row[iLink] : undefined;
+      const title = iName !== -1 ? row[iName] : undefined;
+      const link  = iLink !== -1 ? row[iLink] : undefined;
       if (!title || !link) continue;
-      const imageRawValue = iImage >= 0 ? row[iImage] : "FEJLÉC NEM TALÁLHATÓ";
-      const imageUrlFinal = extractImageUrl(imageRawValue);
-      console.log(`SOR ${r+1}: Kép cella nyers adat: [${imageRawValue}], Feldolgozott URL: [${imageUrlFinal}]`); // <--- IDEIGLENES DEBUG SOR
 
-      const endIso = iEnd >= 0 ? toISO(row[iEnd]) : undefined;
-      const endIso = iEnd >= 0 ? toISO(row[iEnd]) : undefined;
+      const endIso = iEnd !== -1 ? toISO(row[iEnd]) : undefined;
       if (endIso && new Date(endIso).getTime() <= Date.now()) continue;
-      const image = iImage >= 0 ? extractImageUrl(row[iImage]) : undefined;
-      const price = iPrice >= 0 ? parseMoney(row[iPrice]) : undefined;
-      const code  = iCode >= 0 ? row[iCode] : undefined;
-      const wh    = iWh   >= 0 ? row[iWh]   : undefined;
+
+      // Itt a lényeg: Kinyerjük a kép URL-t
+      const imageRaw = iImage !== -1 ? row[iImage] : undefined;
+      const imageUrl = extractImageUrl(imageRaw);
+      
+      // Ha az első sorban vagyunk, naplózzuk, mit találtunk
+      if (r === 1) {
+        console.log(`Első adat sor (R${r+1}) - Nyers kép cella: '${imageRaw}', Kinyert URL: '${imageUrl}'`);
+      }
+
+      const price = iPrice !== -1 ? parseMoney(row[iPrice]) : undefined;
+      const code  = iCode  !== -1 ? row[iCode] : undefined;
+      const wh    = iWh    !== -1 ? row[iWh]   : undefined;
+
       const safeLink = normalizeUrl(String(link)) || String(link);
+
       out.push({
         id: `sheets:${crypto.createHash("md5").update(`${vr.range}|${safeLink}|${code || ""}`).digest("hex")}`,
         src: "sheets",
         title: String(title),
-        image: image || undefined,
+        image: imageUrl || undefined, // Csak akkor adjuk hozzá, ha van értéke
         url: safeLink,
         price,
         cur: "USD",
@@ -229,8 +253,10 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
       });
     }
   }
-  SHEETS_CACHE = { items: out, ts: Date.now() };
-  return out;
+
+  const items = dedupe(out);
+  SHEETS_CACHE = { items, ts: Date.now() };
+  return items;
 }
 
 // Dummy implementációk, ha az ENV változók hiányoznak a bgGetAccessToken-hez

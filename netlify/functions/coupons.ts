@@ -3,7 +3,7 @@ import crypto from "crypto";
 import axios from "axios";
 import { google } from "googleapis";
 
-// ===== Canonical típus =====
+/* ======================== Types ======================== */
 type Deal = {
   id: string;
   src: "banggood" | "sheets";
@@ -23,7 +23,7 @@ type Deal = {
   residual?: number;
 };
 
-// ===== ENV =====
+/* ======================== ENV ======================== */
 const {
   SPREADSHEET_ID,
   GOOGLE_APPLICATION_CREDENTIALS_JSON,
@@ -31,14 +31,14 @@ const {
   BANGGOOD_API_SECRET,
 } = process.env;
 
-// --- Cache-k (memória) ---
+/* ======================== In-memory cache ======================== */
 let SHEETS_CACHE: { items: Deal[]; ts: number } | null = null;
 let BANGGOOD_CACHE: { items: Deal[]; ts: number } | null = null;
 
-const SHEETS_TTL_MS = 5 * 60 * 1000;   // 5 perc
-const BANGGOOD_TTL_MS = 10 * 60 * 1000; // 10 perc
+const SHEETS_TTL_MS = 5 * 60 * 1000;     // 5 perc
+const BANGGOOD_TTL_MS = 10 * 60 * 1000;  // 10 perc
 
-// ===== Util =====
+/* ======================== Utils ======================== */
 function etagOf(json: string) {
   return crypto.createHash("md5").update(json).digest("hex");
 }
@@ -77,8 +77,16 @@ function scoreDeal(d: Deal): number {
   }
   return score;
 }
+function normalizeUrl(u?: string): string | undefined {
+  if (!u) return undefined;
+  try {
+    // http -> https, encode "furcsaságok" (vessző, space stb.)
+    const https = u.replace(/^http:/, "https:");
+    return encodeURI(https);
+  } catch { return u; }
+}
 
-// ===== Banggood adapter =====
+/* ======================== Banggood adapter ======================== */
 function signBanggood(params: Record<string, any>): string {
   const sorted = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join("&");
   return crypto.createHash("md5").update(sorted).digest("hex");
@@ -107,6 +115,7 @@ async function fetchBanggoodDeals(): Promise<Deal[]> {
   }
   const token = await bgGetAccessToken();
   if (!token) return [];
+
   let page = 1, pages = 1;
   const all: Deal[] = [];
 
@@ -121,15 +130,27 @@ async function fetchBanggoodDeals(): Promise<Deal[]> {
     pages = res?.page_total || page;
 
     for (const c of list) {
-      let name: string = (c.promo_link_standard || "").split("/").pop()?.replace(/-/g, " ") || c.only_for || "Banggood deal";
+      // Terméknév a linkből
+      let name: string =
+        (c.promo_link_standard || "").split("/").pop()?.replace(/-/g, " ") ||
+        c.only_for || "Banggood deal";
       name = name.replace(/\?.*$/g, "").replace(/!.*$/g, "");
+
+      // 🔒 Link normalizálás: rövid afflink előnyben, különben encode-olt standard, mindkettő https
+      const stdRaw: string = c.promo_link_standard || "";
+      const shortRaw: string = c.promo_link_short || "";
+      const shortHttps = shortRaw ? shortRaw.replace(/^http:/, "https:") : "";
+      const safeStd = normalizeUrl(stdRaw) || "";
+
+      const finalUrl = shortHttps || safeStd || "#";
+
       const deal: Deal = {
         id: `banggood:${crypto.createHash("md5").update(`${c.promo_link_standard || ""}|${c.coupon_code || ""}`).digest("hex")}`,
         src: "banggood",
         title: name,
         image: c.coupon_img || undefined,
-        url: c.promo_link_standard || c.promo_link_short || "#",
-        short: c.promo_link_short || undefined,
+        url: finalUrl,
+        short: shortHttps || undefined,
         price: parseMoney(c.condition) ?? parseMoney(c.original_price),
         orig: parseMoney(c.original_price),
         cur: c.currency || "USD",
@@ -149,7 +170,7 @@ async function fetchBanggoodDeals(): Promise<Deal[]> {
   return all;
 }
 
-// ===== Google Sheets adapter (TURBO) =====
+/* ======================== Google Sheets adapter (batchGet + cache) ======================== */
 const SHEET_RANGES = [
   "'BG Unique'!A:N",
   "'BG Unique HUN'!A:N"
@@ -182,42 +203,45 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
     const idx = (name: string) => header.indexOf(name);
 
     const iImage = idx("image");
-    const iName = idx("name");
-    const iLink = idx("link");
-    const iOrig = idx("original price");
+    const iName  = idx("name");
+    const iLink  = idx("link");
+    const iOrig  = idx("original price");
     const iPrice = idx("price");
-    const iCode = idx("code");
-    const iWh = idx("warehouse");
-    const iCats = idx("categories");
+    const iCode  = idx("code");
+    const iWh    = idx("warehouse");
+    const iCats  = idx("categories");
     const iStart = idx("start time");
-    const iEnd = idx("end time");
-    const iUpd = idx("update time");
+    const iEnd   = idx("end time");
+    const iUpd   = idx("update time");
 
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r];
       const title = iName >= 0 ? row[iName] : undefined;
-      const link = iLink >= 0 ? row[iLink] : undefined;
+      const link  = iLink >= 0 ? row[iLink] : undefined;
       if (!title || !link) continue;
 
-      const end = iEnd >= 0 ? toISO(row[iEnd]) : undefined;
+      const end   = iEnd >= 0 ? toISO(row[iEnd]) : undefined;
       const notExpired = !end || new Date(end).getTime() > Date.now();
       if (!notExpired) continue;
 
       const image = iImage >= 0 ? row[iImage] : undefined;
-      const orig = iOrig >= 0 ? parseMoney(row[iOrig]) : undefined;
+      const orig  = iOrig  >= 0 ? parseMoney(row[iOrig]) : undefined;
       const price = iPrice >= 0 ? parseMoney(row[iPrice]) : undefined;
-      const code = iCode >= 0 ? row[iCode] : undefined;
-      const wh = iWh >= 0 ? row[iWh] : undefined;
-      const cats = iCats >= 0 && row[iCats] ? String(row[iCats]).split(",").map((s: string) => s.trim()).filter(Boolean) : [];
+      const code  = iCode  >= 0 ? row[iCode] : undefined;
+      const wh    = iWh    >= 0 ? row[iWh] : undefined;
+      const cats  = iCats  >= 0 && row[iCats] ? String(row[iCats]).split(",").map((s: string) => s.trim()).filter(Boolean) : [];
       const start = iStart >= 0 ? toISO(row[iStart]) : undefined;
-      const upd = iUpd >= 0 ? toISO(row[iUpd]) : undefined;
+      const upd   = iUpd   >= 0 ? toISO(row[iUpd]) : undefined;
+
+      // Normalizált, biztonságos https URL (ált. Banggood/Geekbuying linkek)
+      const safeLink = normalizeUrl(String(link)) || String(link);
 
       out.push({
-        id: `sheets:${crypto.createHash("md5").update(`${vr.range}|${link}|${code || ""}`).digest("hex")}`,
+        id: `sheets:${crypto.createHash("md5").update(`${vr.range}|${safeLink}|${code || ""}`).digest("hex")}`,
         src: "sheets",
         title: String(title),
         image: image || undefined,
-        url: String(link),
+        url: safeLink,
         price, orig, cur: "USD",
         code: code || undefined,
         wh: wh || undefined,
@@ -232,7 +256,7 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
   return items;
 }
 
-// ===== Fő handler =====
+/* ======================== Handler ======================== */
 let LAST_JSON = "";
 let LAST_ETAG = "";
 
@@ -248,13 +272,14 @@ export const handler: Handler = async (event) => {
     const minPrice = qs.get("minPrice") ? Number(qs.get("minPrice")) : undefined;
     const maxPrice = qs.get("maxPrice") ? Number(qs.get("maxPrice")) : undefined;
 
-    const promises: Promise<Deal[]>[] = [
+    // Források (párhuzamosan)
+    const allRaw = await Promise.all([
       fetchSheetsDeals().catch(() => []),
       fetchBanggoodDeals().catch(() => [])
-    ];
-    const allRaw = await Promise.all(promises);
+    ]);
     let all = dedupe(allRaw.flat());
 
+    // Demo, ha nincs adat
     if (all.length === 0) {
       all = [{
         id: "demo-1", src: "sheets", title: "BlitzWolf BW-XYZ 65W GaN töltő", url: "https://example.com",
@@ -263,6 +288,7 @@ export const handler: Handler = async (event) => {
       }];
     }
 
+    // Szűrések
     if (q) {
       all = all.filter(d =>
         d.title.toLowerCase().includes(q) ||
@@ -271,7 +297,10 @@ export const handler: Handler = async (event) => {
       );
     }
     if (whFilter) {
-      all = all.filter(d => (d.wh || "").toUpperCase() === whFilter || (whFilter === "EU" && (d.wh || "").toUpperCase() !== "CN"));
+      all = all.filter(d =>
+        (d.wh || "").toUpperCase() === whFilter ||
+        (whFilter === "EU" && (d.wh || "").toUpperCase() !== "CN")
+      );
     }
     if (srcFilter) {
       all = all.filter(d => d.src === srcFilter);
@@ -283,10 +312,12 @@ export const handler: Handler = async (event) => {
       all = all.filter(d => (d.price ?? 0) <= maxPrice);
     }
 
+    // Rangsorolás
     const scored = all.map(d => ({ d, score: scoreDeal(d) }))
       .sort((a, b) => b.score - a.score)
       .map(x => x.d);
 
+    // Lapozás
     const start = cursor ? parseInt(cursor, 10) || 0 : 0;
     const page = scored.slice(start, start + limit);
     const nextCursor = start + limit < scored.length ? String(start + limit) : null;
@@ -296,7 +327,11 @@ export const handler: Handler = async (event) => {
     const etg = etagOf(json);
 
     if (ifNoneMatch && ifNoneMatch === etg) {
-      return { statusCode: 304, headers: { ETag: etg, "Cache-Control": "public, max-age=600, stale-while-revalidate=60" }, body: "" };
+      return {
+        statusCode: 304,
+        headers: { ETag: etg, "Cache-Control": "public, max-age=600, stale-while-revalidate=60" },
+        body: ""
+      };
     }
 
     LAST_JSON = json;
@@ -304,14 +339,24 @@ export const handler: Handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600, stale-while-revalidate=60", "ETag": etg },
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "public, max-age=600, stale-while-revalidate=60",
+        "ETag": etg
+      },
       body: json
     };
   } catch (e: any) {
+    // Snapshot fallback
     if (LAST_JSON) {
       return {
         statusCode: 200,
-        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", "ETag": LAST_ETAG, "X-Fallback": "snapshot" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=60",
+          "ETag": LAST_ETAG,
+          "X-Fallback": "snapshot"
+        },
         body: LAST_JSON
       };
     }

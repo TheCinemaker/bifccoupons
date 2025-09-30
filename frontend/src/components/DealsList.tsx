@@ -49,15 +49,13 @@ export function DealsList({ filters }: { filters: any }) {
   }, [JSON.stringify(filters)]);
 
   async function copyCode(e: React.MouseEvent, deal: Deal) {
-    e.preventDefault(); // ne nyissa meg a linket
+    e.preventDefault();
     if (!deal.code) return;
     try {
       await navigator.clipboard.writeText(deal.code);
       setCopiedId(deal.id);
       setTimeout(() => setCopiedId((id) => (id === deal.id ? null : id)), 1500);
-    } catch {
-      // nagyon régi böngésző fallback nélkül: hagyjuk csendben
-    }
+    } catch {}
   }
 
   if (loading) return <div className="p-4 text-neutral-400">Betöltés…</div>;
@@ -67,15 +65,16 @@ export function DealsList({ filters }: { filters: any }) {
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-3">
       {items.map((d) => {
         const out = d.short || d.url;
-        // Visszaállítottam a 'go' linket az egyszerűbb verzióra, ahogy kérted.
         const go = `/.netlify/functions/go?u=${encodeURIComponent(out)}`;
         const price = formatPrice(d.price, d.cur);
         const orig = d.orig ? formatPrice(d.orig, d.cur) : "";
-        const ends =
-          d.end ? `lejár: ${new Date(d.end).toLocaleDateString("hu-HU")}` : "";
+        const ends = d.end ? `lejár: ${new Date(d.end).toLocaleDateString("hu-HU")}` : "";
 
-        // A képforrást itt definiáljuk, a JSX-en KÍVÜL
+        // ================= JAVÍTÁS ITT =================
+        // A változót a return előtt, a map cikluson belül hozzuk létre.
+        // Ha van kép URL, akkor elkészítjük a proxy URL-t, egyébként null lesz.
         const imgSrc = d.image ? `/.netlify/functions/img?u=${encodeURIComponent(d.image)}` : null;
+        // ================= JAVÍTÁS VÉGE =================
 
         return (
           <a
@@ -85,11 +84,15 @@ export function DealsList({ filters }: { filters: any }) {
             rel="noopener noreferrer"
             className="block bg-neutral-900 rounded-lg p-3 hover:ring-2 ring-amber-400 transition"
           >
-            {/* Itt már helyesen, hiba nélkül jelenítjük meg a képet */}
+            {/* 
+              Itt már csak egy egyszerű feltételt használunk:
+              Ha az imgSrc nem null, akkor jelenítsd meg a képet.
+              Ez a kód szintaktikailag HELYES.
+            */}
             {imgSrc && (
               <img
                 src={imgSrc}
-                alt={d.title}
+                alt={d.title} // A title-t érdemes beletenni az alt tagbe
                 className="w-full h-40 object-cover rounded-md mb-2 bg-neutral-800"
                 loading="lazy"
                 decoding="async"
@@ -109,7 +112,6 @@ export function DealsList({ filters }: { filters: any }) {
               {d.wh || "—"} {ends ? `• ${ends}` : ""}
             </div>
 
-            {/* Kupon szekció */}
             {d.code ? (
               <div className="mt-3 flex items-center gap-2">
                 <span className="text-xs font-mono px-2 py-1 rounded bg-neutral-800 text-neutral-100 border border-neutral-700">

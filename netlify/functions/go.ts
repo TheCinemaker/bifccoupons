@@ -1,11 +1,26 @@
 import type { Handler } from "@netlify/functions";
 
+function appendUtm(u: string) {
+  try {
+    const url = new URL(u);
+    const p = url.searchParams;
+    if (!p.get("utm_source")) p.set("utm_source", "kinabolveddmeg");
+    if (!p.get("utm_medium")) p.set("utm_medium", "pwa");
+    if (!p.get("utm_campaign")) p.set("utm_campaign", "coupons");
+    return url.toString();
+  } catch {
+    return u;
+  }
+}
+
 export const handler: Handler = async (event) => {
   const u = event.queryStringParameters?.u || "";
   if (!u) return { statusCode: 400, body: "Missing u" };
 
+  // https + encode + UTM
   const httpsUrl = u.replace(/^http:/, "https:");
-  const safe = encodeURI(httpsUrl);
+  const withUtm = appendUtm(httpsUrl);
+  const safe = encodeURI(withUtm);
 
   const html = `<!doctype html>
 <html><head>

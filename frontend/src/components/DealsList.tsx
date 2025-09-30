@@ -84,15 +84,15 @@ export function DealsList({ filters }: { filters: any }) {
             className="block bg-neutral-900 rounded-lg p-3 hover:ring-2 ring-amber-400 transition"
           >
             {d.image ? (
+          const imgSrc = d.image ? `/.netlify/functions/img?u=${encodeURIComponent(d.image)}` : "/icons/icon-512.png";
+
               <img
-  src={d.image}
-  alt=""
-  className="w-full h-40 object-cover rounded-md mb-2 bg-neutral-800"
-  loading="lazy"
-  decoding="async"
-  referrerPolicy="no-referrer"
-  onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/icons/icon-512.png"; }}
-/>
+                src={imgSrc}
+                alt=""
+                  className="w-full h-40 object-cover rounded-md mb-2 bg-neutral-800"
+                loading="lazy"
+                decoding="async"
+              />
             ) : null}
 
             <div className="mb-2 font-semibold text-white line-clamp-2">

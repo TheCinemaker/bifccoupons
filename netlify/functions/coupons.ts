@@ -42,16 +42,57 @@ const BANGGOOD_TTL_MS = 10 * 60 * 1000;  // 10 perc
 function etagOf(json: string) {
   return crypto.createHash("md5").update(json).digest("hex");
 }
+
+// Pénz sztring robusztus parse: kezeli a szóközöket, NBSP-t, ,/. tizedest
 function parseMoney(v: any): number | undefined {
   if (v === null || v === undefined) return undefined;
-  const num = Number(String(v).replace(/[^\d.]/g, ""));
+  let s = String(v).trim();
+  if (!s) return undefined;
+
+  // cseréljük az NBSP-t és normál szóközt
+  s = s.replace(/\u00A0/g, " ").replace(/\s+/g, "");
+
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
+
+  if (hasComma && !hasDot) {
+    // EU formátum: 1189,99 -> 1189.99
+    s = s.replace(",", ".");
+  } else if (hasComma && hasDot) {
+    // Döntsük el mi a tizedes: ha az utolsó jel , akkor EU: 1.234,56 -> 1234.56
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else {
+      // US: 1,234.56 -> 1234.56
+      s = s.replace(/,/g, "");
+    }
+  }
+  // csak szám + pont maradjon
+  s = s.replace(/[^\d.]/g, "");
+  // ha több pont maradt, az utolsó legyen tizedes
+  const parts = s.split(".");
+  if (parts.length > 2) {
+    const dec = parts.pop();
+    s = parts.join("") + "." + dec;
+  }
+  const num = parseFloat(s);
   return Number.isFinite(num) ? num : undefined;
 }
+
 function toISO(d?: string | number | Date): string | undefined {
   if (!d) return undefined;
   const dt = new Date(d);
   return isNaN(dt.getTime()) ? undefined : dt.toISOString();
 }
+
+function normalizeUrl(u?: string): string | undefined {
+  if (!u) return undefined;
+  try {
+    const https = u.replace(/^http:/, "https:");
+    return encodeURI(https);
+  } catch { return u; }
+}
+
 function dedupe(deals: Deal[]): Deal[] {
   const seen = new Set<string>();
   const out: Deal[] = [];
@@ -64,6 +105,7 @@ function dedupe(deals: Deal[]): Deal[] {
   }
   return out;
 }
+
 function scoreDeal(d: Deal): number {
   let score = 0;
   if ((d.wh || "").toUpperCase() !== "CN") score += 10; // EU boost
@@ -76,14 +118,6 @@ function scoreDeal(d: Deal): number {
     score += Math.min(8, Math.max(0, disc / 5));
   }
   return score;
-}
-function normalizeUrl(u?: string): string | undefined {
-  if (!u) return undefined;
-  try {
-    // http -> https, encode "furcsaságok" (vessző, space stb.)
-    const https = u.replace(/^http:/, "https:");
-    return encodeURI(https);
-  } catch { return u; }
 }
 
 /* ======================== Banggood adapter ======================== */
@@ -130,13 +164,12 @@ async function fetchBanggoodDeals(): Promise<Deal[]> {
     pages = res?.page_total || page;
 
     for (const c of list) {
-      // Terméknév a linkből
       let name: string =
         (c.promo_link_standard || "").split("/").pop()?.replace(/-/g, " ") ||
         c.only_for || "Banggood deal";
       name = name.replace(/\?.*$/g, "").replace(/!.*$/g, "");
 
-      // 🔒 Link normalizálás: rövid afflink előnyben, különben encode-olt standard, mindkettő https
+      // Rövid afflink előnyben, különben encode-olt standard – mindkettő https
       const stdRaw: string = c.promo_link_standard || "";
       const shortRaw: string = c.promo_link_short || "";
       const shortHttps = shortRaw ? shortRaw.replace(/^http:/, "https:") : "";
@@ -171,10 +204,21 @@ async function fetchBanggoodDeals(): Promise<Deal[]> {
 }
 
 /* ======================== Google Sheets adapter (batchGet + cache) ======================== */
+/** Csak ezeket a lapokat húzzuk (gyors) – bővíthető */
 const SHEET_RANGES = [
-  "'BG Unique'!A:N",
-  "'BG Unique HUN'!A:N"
+  "'BG Unique'!A:Z",
+  "'BG Unique HUN'!A:Z"
 ];
+
+// kis helper: többféle elnevezést is elfogadunk
+function findIdx(header: string[], aliases: string[]): number {
+  const lower = header.map(h => String(h).trim().toLowerCase());
+  for (const a of aliases) {
+    const i = lower.indexOf(a.toLowerCase());
+    if (i !== -1) return i;
+  }
+  return -1;
+}
 
 async function fetchSheetsDeals(): Promise<Deal[]> {
   if (!SPREADSHEET_ID || !GOOGLE_APPLICATION_CREDENTIALS_JSON) return [];
@@ -199,20 +243,14 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
     const rows = vr.values || [];
     if (!rows.length) continue;
 
-    const header = rows[0].map((h: any) => String(h).trim().toLowerCase());
-    const idx = (name: string) => header.indexOf(name);
-
-    const iImage = idx("image");
-    const iName  = idx("name");
-    const iLink  = idx("link");
-    const iOrig  = idx("original price");
-    const iPrice = idx("price");
-    const iCode  = idx("code");
-    const iWh    = idx("warehouse");
-    const iCats  = idx("categories");
-    const iStart = idx("start time");
-    const iEnd   = idx("end time");
-    const iUpd   = idx("update time");
+    const header = rows[0].map((h: any) => String(h));
+    const iImage = findIdx(header, ["Image"]);
+    const iName  = findIdx(header, ["Product name", "Name"]);
+    const iLink  = findIdx(header, ["Link", "URL"]);
+    const iPrice = findIdx(header, ["Coupon price", "Price"]);
+    const iCode  = findIdx(header, ["Coupon code", "Code"]);
+    const iWh    = findIdx(header, ["Warehouse"]);
+    const iEnd   = findIdx(header, ["End time", "End", "Expiry", "Expire"]);
 
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r];
@@ -220,20 +258,15 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
       const link  = iLink >= 0 ? row[iLink] : undefined;
       if (!title || !link) continue;
 
-      const end   = iEnd >= 0 ? toISO(row[iEnd]) : undefined;
-      const notExpired = !end || new Date(end).getTime() > Date.now();
+      const endIso = iEnd >= 0 ? toISO(row[iEnd]) : undefined;
+      const notExpired = !endIso || new Date(endIso).getTime() > Date.now();
       if (!notExpired) continue;
 
       const image = iImage >= 0 ? row[iImage] : undefined;
-      const orig  = iOrig  >= 0 ? parseMoney(row[iOrig]) : undefined;
       const price = iPrice >= 0 ? parseMoney(row[iPrice]) : undefined;
-      const code  = iCode  >= 0 ? row[iCode] : undefined;
-      const wh    = iWh    >= 0 ? row[iWh] : undefined;
-      const cats  = iCats  >= 0 && row[iCats] ? String(row[iCats]).split(",").map((s: string) => s.trim()).filter(Boolean) : [];
-      const start = iStart >= 0 ? toISO(row[iStart]) : undefined;
-      const upd   = iUpd   >= 0 ? toISO(row[iUpd]) : undefined;
+      const code  = iCode >= 0 ? row[iCode] : undefined;
+      const wh    = iWh   >= 0 ? row[iWh]   : undefined;
 
-      // Normalizált, biztonságos https URL (ált. Banggood/Geekbuying linkek)
       const safeLink = normalizeUrl(String(link)) || String(link);
 
       out.push({
@@ -242,11 +275,12 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
         title: String(title),
         image: image || undefined,
         url: safeLink,
-        price, orig, cur: "USD",
+        price,
+        // Banggood sheetnél az ár USD – ha akarsz külön oszlopot currency-re, könnyen bővíthető
+        cur: "USD",
         code: code || undefined,
         wh: wh || undefined,
-        start, end, updated: upd,
-        tags: cats
+        end: endIso
       });
     }
   }
@@ -272,14 +306,12 @@ export const handler: Handler = async (event) => {
     const minPrice = qs.get("minPrice") ? Number(qs.get("minPrice")) : undefined;
     const maxPrice = qs.get("maxPrice") ? Number(qs.get("maxPrice")) : undefined;
 
-    // Források (párhuzamosan)
     const allRaw = await Promise.all([
       fetchSheetsDeals().catch(() => []),
       fetchBanggoodDeals().catch(() => [])
     ]);
     let all = dedupe(allRaw.flat());
 
-    // Demo, ha nincs adat
     if (all.length === 0) {
       all = [{
         id: "demo-1", src: "sheets", title: "BlitzWolf BW-XYZ 65W GaN töltő", url: "https://example.com",
@@ -347,7 +379,6 @@ export const handler: Handler = async (event) => {
       body: json
     };
   } catch (e: any) {
-    // Snapshot fallback
     if (LAST_JSON) {
       return {
         statusCode: 200,

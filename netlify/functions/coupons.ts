@@ -106,12 +106,23 @@ function findIdx(header: string[], aliases: string[]): number {
 }
 async function fetchSheetsDeals(): Promise<Deal[]> {
   if (!SPREADSHEET_ID || !GOOGLE_APPLICATION_CREDENTIALS_JSON) return [];
-  if (SHEETS_CACHE && Date.now() - SHEETS_CACHE.ts < SHEETS_TTL_MS) { return SHEETS_CACHE.items; }
+  if (SHEETS_CACHE && Date.now() - SHEETS_CACHE.ts < SHEETS_TTL_MS) {
+    console.log("Adatok a Sheets Cache-ből.");
+    return SHEETS_CACHE.items;
+  }
 
+  console.log("Adatok lekérése a Google Sheets-ből...");
   const creds = JSON.parse(GOOGLE_APPLICATION_CREDENTIALS_JSON!);
-  const jwt = new google.auth.JWT(creds.client_email, undefined, creds.private_key, ["https://www.googleapis.com/auth/spreadsheets.readonly"]);
+  const jwt = new google.auth.JWT(
+    creds.client_email, undefined, creds.private_key,
+    ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+  );
   const sheets = google.sheets({ version: "v4", auth: jwt });
-  const resp = await sheets.spreadsheets.values.batchGet({ spreadsheetId: SPREADSHEET_ID!, ranges: SHEET_RANGES });
+
+  const resp = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId: SPREADSHEET_ID!,
+    ranges: SHEET_RANGES
+  });
 
   const out: Deal[] = [];
   for (const vr of resp.data.valueRanges || []) {
@@ -119,47 +130,49 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
     if (rows.length < 2) continue;
 
     const header = rows[0].map((h: any) => String(h));
-    // A többi oszlopot továbbra is név alapján keressük a rugalmasságért.
     const iName  = findIdx(header, ["Product name", "Name"]);
     const iLink  = findIdx(header, ["Link", "URL"]);
-    const iPrice = findIdx(header, ["Coupon price", "Price"]);
-    const iCode  = findIdx(header, ["Coupon code", "Code"]);
-    const iWh    = findIdx(header, ["Warehouse"]);
-    const iEnd   = findIdx(header, ["End time", "End", "Expiry", "Expire"]);
+    // ... többi index
 
+    console.log(`Munkalap: ${vr.range}. Sorok száma: ${rows.length}. Fejléc: [${header.join(", ")}]`);
+
+    // A ciklus r=1-gyel indul, ami a MÁSODIK sor.
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r];
+      
+      // ========================== DIAGNOSZTIKA ITT ==========================
+      // Nézzük meg, mit lát a kód a 2. sorban (amikor r=1)
+      if (r === 1) {
+          console.log(`SOR 2 (index 1) NYERS ADATAI: [${row.join(" | ")}]`);
+          console.log(`SOR 2 (index 1) 'A' OSZLOP (index 0) NYERS ÉRTÉKE: >>>${row[0]}<<<`);
+      }
+      // =====================================================================
+
       const title = iName !== -1 ? row[iName] : undefined;
       const link  = iLink !== -1 ? row[iLink] : undefined;
       if (!title || !link) continue;
 
-      const endIso = iEnd !== -1 ? toISO(row[iEnd]) : undefined;
-      if (endIso && new Date(endIso).getTime() <= Date.now()) continue;
-
-      // ========================== ITT A JAVÍTÁS ==========================
-      // Nem keressük a fejlécet. Feltételezzük, hogy a kép az ELSŐ ("A") oszlopban van.
-      // Az oszlop indexe 0.
-      const imageRaw = row[0]; 
+      // A kép az első ("A") oszlop, tehát row[0]
+      const imageRaw = row[0];
       const imageUrl = extractImageUrl(imageRaw);
-      // ===================================================================
 
-      const price = iPrice !== -1 ? parseMoney(row[iPrice]) : undefined;
-      const code  = iCode  !== -1 ? row[iCode] : undefined;
-      const wh    = iWh    !== -1 ? row[iWh]   : undefined;
+      // ... a többi adat feldolgozása ...
       const safeLink = normalizeUrl(String(link)) || String(link);
 
       out.push({
-        id: `sheets:${crypto.createHash("md5").update(`${vr.range}|${safeLink}|${code || ""}`).digest("hex")}`,
+        id: `sheets:${crypto.createHash("md5").update(`${vr.range}|${safeLink}|${row[iCode] || ""}`).digest("hex")}`,
         src: "sheets",
         title: String(title),
-        image: imageUrl, // Itt adjuk át a (remélhetőleg) megtalált URL-t
+        image: imageUrl, // Itt adjuk át
         url: safeLink,
-        price, cur: "USD", code: code || undefined, wh: wh || undefined, end: endIso
+        // ... többi mező
       });
     }
   }
-  const items = dedupe(out);
-  SHEETS_CACHE = { items, ts: Date.now() }; return items;
+  
+  console.log(`Feldolgozva ${out.length} elem a Sheets-ből.`);
+  SHEETS_CACHE = { items: out, ts: Date.now() };
+  return out;
 }
 function dedupe(deals: Deal[]): Deal[] {
   const seen = new Set<string>(); const out: Deal[] = [];

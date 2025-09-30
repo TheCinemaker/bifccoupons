@@ -117,24 +117,33 @@ async function fetchBanggoodDeals(): Promise<Deal[]> {
       // terméknév linkből
       let name: string = (c.promo_link_standard || "").split("/").pop()?.replace(/-/g, " ") || c.only_for || "Banggood deal";
       name = name.replace(/\?.*$/g, "").replace(/!.*$/g, "");
-      const deal: Deal = {
-        id: `banggood:${crypto.createHash("md5").update(`${c.promo_link_standard || ""}|${c.coupon_code || ""}`).digest("hex")}`,
-        src: "banggood",
-        title: name,
-        image: c.coupon_img || undefined,
-        url: c.promo_link_standard || c.promo_link_short || "#",
-        short: c.promo_link_short || undefined,
-        price: parseMoney(c.condition) ?? parseMoney(c.original_price),
-        orig: parseMoney(c.original_price),
-        cur: c.currency || "USD",
-        code: c.coupon_code || undefined,
-        wh: c.warehouse || undefined,
-        start: toISO(c.coupon_date_start),
-        end: toISO(c.coupon_date_end),
-        updated: toISO(Date.now()),
-        tags: [],
-        residual: c.coupon_residual ? Number(c.coupon_residual) : undefined
-      };
+      const stdRaw = c.promo_link_standard || "";
+const shortRaw = c.promo_link_short || "";
+const stdHttps = stdRaw.replace(/^http:/, "https:");
+const shortHttps = shortRaw.replace(/^http:/, "https:");
+const safeStd = stdHttps ? encodeURI(stdHttps) : "";
+
+// végső link
+const finalUrl = shortHttps || safeStd;
+
+const deal: Deal = {
+  id: `banggood:${crypto.createHash("md5").update(`${c.promo_link_standard || ""}|${c.coupon_code || ""}`).digest("hex")}`,
+  src: "banggood",
+  title: name,
+  image: c.coupon_img || undefined,
+  url: finalUrl,                  // ← EZ lesz a kártya linkje
+  short: shortHttps || undefined, // rövid link külön mezőben is
+  price: parseMoney(c.condition) ?? parseMoney(c.original_price),
+  orig: parseMoney(c.original_price),
+  cur: c.currency || "USD",
+  code: c.coupon_code || undefined,
+  wh: c.warehouse || undefined,
+  start: toISO(c.coupon_date_start),
+  end: toISO(c.coupon_date_end),
+  updated: toISO(Date.now()),
+  tags: [],
+  residual: c.coupon_residual ? Number(c.coupon_residual) : undefined
+};
       all.push(deal);
     }
     page++;

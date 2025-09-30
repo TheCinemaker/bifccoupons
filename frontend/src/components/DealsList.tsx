@@ -26,8 +26,16 @@ export function DealsList({ filters }:{ filters:any }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-3">
       {items.map(d => (
-        <a key={d.id} href={d.url} target="_blank" rel="noopener"
-           className="block bg-neutral-900 rounded-lg p-3 hover:ring-2 ring-amber-400 transition">
+        const out = d.short || d.url;
+        const go = `/.netlify/functions/go?u=${encodeURIComponent(out)}`;
+
+          <a
+            key={d.id}
+            href={go}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block bg-neutral-900 rounded-lg p-3 hover:ring-2 ring-amber-400 transition"
+          >
           <div className="mb-2 font-semibold text-white line-clamp-2">{d.title}</div>
           <div className="text-sm text-neutral-300">
             {d.price ? `$${d.price}` : ""} {d.orig ? <span className="line-through opacity-60 ml-2">${d.orig}</span> : null}

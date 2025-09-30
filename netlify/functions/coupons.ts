@@ -93,8 +93,21 @@ function findIdx(header: string[], aliases: string[]): number { const lower = he
 async function fetchSheetsDeals(): Promise<Deal[]> {
   if (!SPREADSHEET_ID || !GOOGLE_APPLICATION_CREDENTIALS_JSON) return [];
   if (SHEETS_CACHE && Date.now() - SHEETS_CACHE.ts < SHEETS_TTL_MS) { return SHEETS_CACHE.items; }
+  
   const creds = JSON.parse(GOOGLE_APPLICATION_CREDENTIALS_JSON!);
-  const jwt = new google.auth.JWT(creds.client_email, undefined, creds.private_key, ["https://www.googleapis.com/auth/spreadsheets.readonly"]);
+  
+  // ========================== ITT A VÉGLEGES JAVÍTÁS ==========================
+  // A `private_key`-ben lévő `\\n` szöveget valódi sortörésekre (`\n`) cseréljük.
+  const privateKey = creds.private_key.replace(/\\n/g, '\n');
+  // =========================================================================
+
+  const jwt = new google.auth.JWT(
+      creds.client_email, 
+      undefined, 
+      privateKey, // Itt már a javított kulcsot használjuk!
+      ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+  );
+
   const sheets = google.sheets({ version: "v4", auth: jwt });
   const resp = await sheets.spreadsheets.values.batchGet({ spreadsheetId: SPREADSHEET_ID!, ranges: SHEET_RANGES });
   const out: Deal[] = [];

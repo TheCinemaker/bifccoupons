@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from "react";
 
-type Deal = { id: string; src: string; title: string; url: string; wh?: string; code?: string; price?: number; orig?: number; cur?: string; end?: string; };
+type Deal = {
+  id: string; src: string; title: string; url: string;
+  wh?: string; code?: string; price?: number; orig?: number; cur?: string; end?: string;
+};
 
-export function DealsList({ filters }: { filters: any }) {
+export function DealsList({ filters }:{ filters:any }) {
   const [items, setItems] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    const qs = new URLSearchParams(Object.entries(filters).filter(([_, v]) => v !== undefined) as any).toString();
+    const qs = new URLSearchParams(Object.entries(filters).filter(([_,v]) => v !== undefined) as any).toString();
     fetch(`/.netlify/functions/coupons?${qs}`, { headers: { "Cache-Control": "no-cache" } })
       .then(r => r.json())
       .then(d => { if (!alive) return; setItems(d.items || []); setLoading(false); })
@@ -17,10 +20,11 @@ export function DealsList({ filters }: { filters: any }) {
     return () => { alive = false; };
   }, [JSON.stringify(filters)]);
 
-  if (loading) return <div className="text-neutral-400">Betöltés…</div>;
+  if (loading) return <div className="p-4 text-neutral-400">Betöltés…</div>;
+  if (!items.length) return <div className="p-4 text-neutral-400">Nincs találat.</div>;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-3">
       {items.map(d => (
         <a key={d.id} href={d.url} target="_blank" rel="noopener"
            className="block bg-neutral-900 rounded-lg p-3 hover:ring-2 ring-amber-400 transition">

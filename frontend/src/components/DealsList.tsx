@@ -49,31 +49,29 @@ export function DealsList({ filters }: { filters: any }) {
   }, [JSON.stringify(filters)]);
 
   async function copyCode(e: React.MouseEvent, deal: Deal) {
-    e.preventDefault(); // ne nyissa meg a linket
+    e.preventDefault();
     if (!deal.code) return;
     try {
       await navigator.clipboard.writeText(deal.code);
       setCopiedId(deal.id);
       setTimeout(() => setCopiedId((id) => (id === deal.id ? null : id)), 1500);
-    } catch {
-      // nagyon régi böngésző fallback nélkül: hagyjuk csendben
-    }
+    } catch {}
   }
 
   if (loading) return <div className="p-4 text-neutral-400">Betöltés…</div>;
   if (!items.length) return <div className="p-4 text-neutral-400">Nincs találat.</div>;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-3">
+    <div className="grid grid-cols-1 sm-grid-cols-2 md-grid-cols-3 gap-3 p-3">
       {items.map((d) => {
         const out = d.short || d.url;
-        const go = `/.netlify/functions/go?u=${encodeURIComponent(out)}&src=${encodeURIComponent(
-          d.src || ""
-        )}&code=${encodeURIComponent(d.code || "")}`;
+        const go = `/.netlify/functions/go?u=${encodeURIComponent(out)}`;
         const price = formatPrice(d.price, d.cur);
         const orig = d.orig ? formatPrice(d.orig, d.cur) : "";
-        const ends =
-          d.end ? `lejár: ${new Date(d.end).toLocaleDateString("hu-HU")}` : "";
+        const ends = d.end ? `lejár: ${new Date(d.end).toLocaleDateString("hu-HU")}` : "";
+        
+        // JAVÍTÁS: A változót a JSX-en kívül definiáljuk!
+        const imgSrc = d.image ? `/.netlify/functions/img?u=${encodeURIComponent(d.image)}` : null;
 
         return (
           <a
@@ -81,53 +79,53 @@ export function DealsList({ filters }: { filters: any }) {
             href={go}
             target="_blank"
             rel="noopener noreferrer"
-            className="block bg-neutral-900 rounded-lg p-3 hover:ring-2 ring-amber-400 transition"
+            className="block bg-neutral-900 rounded-lg p-3 hover:ring-2 ring-amber-400 transition flex flex-col"
           >
-            {d.image ? (
-          const imgSrc = d.image ? `/.netlify/functions/img?u=${encodeURIComponent(d.image)}` : "/icons/icon-512.png";
-
+            {/* JAVÍTÁS: Egyszerű feltételes renderelés */}
+            {imgSrc && (
               <img
                 src={imgSrc}
-                alt=""
-                  className="w-full h-40 object-cover rounded-md mb-2 bg-neutral-800"
+                alt={d.title} // Fontos az akadálymentesítéshez!
+                className="w-full h-40 object-cover rounded-md mb-2 bg-neutral-800"
                 loading="lazy"
                 decoding="async"
               />
-            ) : null}
+            )}
 
-            <div className="mb-2 font-semibold text-white line-clamp-2">
+            <div className="mb-2 font-semibold text-white line-clamp-2 flex-grow">
               {d.title}
             </div>
 
-            <div className="text-sm text-neutral-200">
-              {price}
-              {orig ? <span className="line-through opacity-60 ml-2">{orig}</span> : null}
-            </div>
-
-            <div className="text-xs text-neutral-500 mt-1">
-              {d.wh || "—"} {ends ? `• ${ends}` : ""}
-            </div>
-
-            {/* Kupon szekció */}
-            {d.code ? (
-              <div className="mt-3 flex items-center gap-2">
-                <span className="text-xs font-mono px-2 py-1 rounded bg-neutral-800 text-neutral-100 border border-neutral-700">
-                  {d.code}
-                </span>
-                <button
-                  className="text-xs px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30"
-                  onClick={(e) => copyCode(e, d)}
-                  aria-label="Kuponkód másolása"
-                  title="Kuponkód másolása"
-                >
-                  {copiedId === d.id ? "✔ Másolva" : "Másolás"}
-                </button>
+            <div className="mt-auto"> {/* Alulra igazítás a flex containerben */}
+              <div className="text-sm text-neutral-200">
+                {price}
+                {orig ? <span className="line-through opacity-60 ml-2">{orig}</span> : null}
               </div>
-            ) : (
-              <div className="mt-3 text-xs text-neutral-400">
-                Nincs kuponkód – akciós ár
+
+              <div className="text-xs text-neutral-500 mt-1">
+                {d.wh || "—"} {ends ? `• ${ends}` : ""}
               </div>
-            )}
+
+              {d.code ? (
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-xs font-mono px-2 py-1 rounded bg-neutral-800 text-neutral-100 border border-neutral-700">
+                    {d.code}
+                  </span>
+                  <button
+                    className="text-xs px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30"
+                    onClick={(e) => copyCode(e, d)}
+                    aria-label="Kuponkód másolása"
+                    title="Kuponkód másolása"
+                  >
+                    {copiedId === d.id ? "✔ Másolva" : "Másolás"}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-3 text-xs text-neutral-400">
+                  Nincs kuponkód – akciós ár
+                </div>
+              )}
+            </div>
           </a>
         );
       })}

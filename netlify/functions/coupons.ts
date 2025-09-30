@@ -166,8 +166,8 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
 
   const sheetNames = [
     "BG Unique", "BG Unique HUN", "BG ALL Coupons",
-    "Geekbuying", "Geekbuying Unique",
-    "AliExpress", "AliExpress Choice"
+    "Geekbuying", "Geekbuying Unique"
+  
   ].filter(n => !!doc.sheetsByTitle[n]);
 
   const out: Deal[] = [];

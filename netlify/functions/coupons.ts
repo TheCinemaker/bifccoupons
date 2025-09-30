@@ -45,9 +45,20 @@ function etagOf(json: string) {
 function extractImageUrl(raw: any): string | undefined {
   if (!raw) return undefined;
   let s = String(raw).trim();
-  const m = s.match(/image\s*\(\s*["']([^"']+)["']/i);
-  if (m?.[1]) return m[1];
-  if (s.startsWith("http")) return s;
+  if (!s) return undefined; // Ha a cella üres, itt megállunk
+
+  // Először a =IMAGE("...") formulát keressük
+  const formulaMatch = s.match(/image\s*\(\s*["']([^"']+)["']/i);
+  if (formulaMatch?.[1]) {
+    return formulaMatch[1];
+  }
+
+  // Ha nem formula, akkor csak akkor fogadjuk el, ha http-vel kezdődik
+  if (s.startsWith("http")) {
+    return s;
+  }
+
+  // Minden más esetben (pl. "nincs kép", vagy hibás adat) nincs kép
   return undefined;
 }
 function parseMoney(v: any): number | undefined {
@@ -192,6 +203,11 @@ async function fetchSheetsDeals(): Promise<Deal[]> {
       const title = iName >= 0 ? row[iName] : undefined;
       const link  = iLink >= 0 ? row[iLink] : undefined;
       if (!title || !link) continue;
+      const imageRawValue = iImage >= 0 ? row[iImage] : "FEJLÉC NEM TALÁLHATÓ";
+      const imageUrlFinal = extractImageUrl(imageRawValue);
+      console.log(`SOR ${r+1}: Kép cella nyers adat: [${imageRawValue}], Feldolgozott URL: [${imageUrlFinal}]`); // <--- IDEIGLENES DEBUG SOR
+
+      const endIso = iEnd >= 0 ? toISO(row[iEnd]) : undefined;
       const endIso = iEnd >= 0 ? toISO(row[iEnd]) : undefined;
       if (endIso && new Date(endIso).getTime() <= Date.now()) continue;
       const image = iImage >= 0 ? extractImageUrl(row[iImage]) : undefined;

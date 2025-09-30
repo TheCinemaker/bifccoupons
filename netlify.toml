@@ -1,0 +1,17 @@
+[build]
+  command = "npm --prefix frontend run build"
+  publish = "frontend/dist"
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["frontend/public/**"]
+
+[[scheduled.functions]]
+  name = "snapshot-write"
+  schedule = "*/15 * * * *"
+
+# statikus cache
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

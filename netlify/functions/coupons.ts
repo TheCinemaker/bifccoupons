@@ -1,17 +1,14 @@
-// netlify/functions/coupons.ts
 import type { Handler } from "@netlify/functions";
 import crypto from "crypto";
-import axios from "axios";
 import { google } from "googleapis";
 
-/* ======================== Types ======================== */
+/* ============== Típus ============== */
 type Deal = {
   id: string;
-  src: "banggood" | "sheets";
+  src: "sheets";
   title: string;
-  image?: string;
   url: string;
-  short?: string;
+  image?: string;
   price?: number;
   orig?: number;
   cur?: string;
@@ -21,26 +18,16 @@ type Deal = {
   end?: string;
   updated?: string;
   tags?: string[];
-  residual?: number;
 };
 
-/* ======================== ENV ======================== */
-const {
-  SPREADSHEET_ID,
-  GOOGLE_APPLICATION_CREDENTIALS_JSON,
-  BANGGOOD_API_KEY,
-  BANGGOOD_API_SECRET,
-  DEBUG, // "1" = bővebb log
-} = process.env;
+/* ============== ENV ============== */
+const { SPREADSHEET_ID, GOOGLE_APPLICATION_CREDENTIALS_JSON } = process.env;
 
-/* ======================== In-memory cache ======================== */
+/* ============== Cache ============== */
 let SHEETS_CACHE: { items: Deal[]; ts: number } | null = null;
-let BANGGOOD_CACHE: { items: Deal[]; ts: number } | null = null;
-
 const SHEETS_TTL_MS = 5 * 60 * 1000;
-const BANGGOOD_TTL_MS = 10 * 60 * 1000;
 
-/* ======================== Utils ======================== */
+/* ============== Utils ============== */
 function etagOf(json: string) {
   return crypto.createHash("md5").update(json).digest("hex");
 }
@@ -51,22 +38,18 @@ function sanitizeCreds(json: string) {
   }
   return creds;
 }
-// =IMAGE("…") vagy sima URL
-function extractImageUrl(raw: any): string | undefined {
-  if (!raw) return undefined;
-  const s = String(raw).trim();
-  const m = s.match(/image\s*\(\s*["']([^"']+)["']/i);
-  return m?.[1] || (s.startsWith("http") ? s : undefined);
-}
 function normalizeUrl(u?: string): string | undefined {
   if (!u) return undefined;
   try {
-    const https = u.replace(/^http:/, "https:");
-    return encodeURI(https);
-  } catch { return u; }
+    const s = String(u).trim();
+    if (!/^https?:\/\//i.test(s)) return undefined;
+    return encodeURI(s.replace(/^http:/i, "https:"));
+  } catch {
+    return undefined;
+  }
 }
 function parseMoney(v: any): number | undefined {
-  if (v === null || v === undefined) return undefined;
+  if (v == null) return undefined;
   let s = String(v).trim();
   if (!s) return undefined;
   s = s.replace(/\u00A0/g, " ").replace(/\s+/g, "");
@@ -78,7 +61,10 @@ function parseMoney(v: any): number | undefined {
   }
   s = s.replace(/[^\d.]/g, "");
   const parts = s.split(".");
-  if (parts.length > 2) { const dec = parts.pop(); s = parts.join("") + "." + dec; }
+  if (parts.length > 2) {
+    const dec = parts.pop();
+    s = parts.join("") + "." + dec;
+  }
   const num = parseFloat(s);
   return Number.isFinite(num) ? num : undefined;
 }
@@ -87,203 +73,127 @@ function toISO(d?: string | number | Date): string | undefined {
   const dt = new Date(d);
   return isNaN(dt.getTime()) ? undefined : dt.toISOString();
 }
-function dedupe(deals: Deal[]): Deal[] {
-  const seen = new Set<string>(), out: Deal[] = [];
-  for (const d of deals) {
-    const key = crypto.createHash("md5").update(`${d.src}|${d.url}|${d.code || ""}`).digest("hex");
-    if (!seen.has(key)) { seen.add(key); out.push(d); }
-  }
-  return out;
-}
 function scoreDeal(d: Deal): number {
   let score = 0;
-  if ((d.wh || "").toUpperCase() !== "CN") score += 10;
+  if ((d.wh || "").toUpperCase() !== "CN") score += 10; // EU boost
   if (d.end) {
     const days = Math.max(0, (new Date(d.end).getTime() - Date.now()) / 86400000);
     score += 10 - Math.min(10, days);
   }
-  if (d.price && d.orig && d.price < d.orig) {
-    const disc = 100 * (1 - d.price / d.orig);
-    score += Math.min(8, Math.max(0, disc / 5));
-  }
   return score;
 }
-
-/* ======================== Banggood adapter ======================== */
-function signBanggood(params: Record<string, any>): string {
-  const sorted = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join("&");
-  return crypto.createHash("md5").update(sorted).digest("hex");
-}
-async function bgGetAccessToken(): Promise<string | null> {
-  if (!BANGGOOD_API_KEY || !BANGGOOD_API_SECRET) return null;
-  const timestamp = Math.floor(Date.now() / 1000);
-  const noncestr = Math.random().toString(36).slice(2);
-  const signature = signBanggood({ api_key: BANGGOOD_API_KEY, api_secret: BANGGOOD_API_SECRET, noncestr, timestamp });
-  const { data } = await axios.get("https://affapi.banggood.com/getAccessToken", {
-    params: { api_key: BANGGOOD_API_KEY, noncestr, timestamp, signature }, timeout: 8000
-  });
-  return data?.result?.access_token || null;
-}
-async function fetchBanggoodDeals(): Promise<Deal[]> {
-  if (BANGGOOD_CACHE && Date.now() - BANGGOOD_CACHE.ts < BANGGOOD_TTL_MS) return BANGGOOD_CACHE.items;
-  const token = await bgGetAccessToken(); if (!token) return [];
-  let page = 1, pages = 1; const all: Deal[] = [];
-  while (page <= pages) {
-    const { data } = await axios.get("https://affapi.banggood.com/coupon/list", {
-      headers: { "access-token": token }, params: { type: 2, page }, timeout: 10000
-    });
-    const res = data?.result, list: any[] = res?.coupon_list || []; pages = res?.page_total || page;
-    for (const c of list) {
-      let name: string = (c.promo_link_standard || "").split("/").pop()?.replace(/-/g, " ")
-        || c.only_for || "Banggood deal";
-      name = name.replace(/\?.*$/g, "").replace(/!.*$/g, "");
-      const stdRaw: string = c.promo_link_standard || "", shortRaw: string = c.promo_link_short || "";
-      const shortHttps = shortRaw ? shortRaw.replace(/^http:/, "https:") : "";
-      const safeStd = normalizeUrl(stdRaw) || "";
-      const finalUrl = shortHttps || safeStd || "#";
-      const deal: Deal = {
-        id: `banggood:${crypto.createHash("md5").update(`${c.promo_link_standard || ""}|${c.coupon_code || ""}`).digest("hex")}`,
-        src: "banggood",
-        title: name,
-        image: normalizeUrl(c.coupon_img) || undefined,
-        url: finalUrl,
-        short: shortHttps || undefined,
-        price: parseMoney(c.condition) ?? parseMoney(c.original_price),
-        orig: parseMoney(c.original_price),
-        cur: c.currency || "USD",
-        code: c.coupon_code || undefined,
-        wh: c.warehouse || undefined,
-        start: toISO(c.coupon_date_start),
-        end: toISO(c.coupon_date_end),
-        updated: toISO(Date.now()),
-        tags: [],
-        residual: c.coupon_residual ? Number(c.coupon_residual) : undefined
-      };
-      all.push(deal);
-    }
-    page++;
+function dedupe(items: Deal[]): Deal[] {
+  const seen = new Set<string>();
+  const out: Deal[] = [];
+  for (const d of items) {
+    const key = crypto.createHash("md5").update(`${d.url}|${d.code || ""}`).digest("hex");
+    if (!seen.has(key)) { seen.add(key); out.push(d); }
   }
-  BANGGOOD_CACHE = { items: all, ts: Date.now() };
-  return all;
+  return out;
 }
 
-/* ======================== Google Sheets adapter (AUTODETECT SHEETS) ======================== */
-function findIdx(header: string[], aliases: string[]): number {
-  const lower = header.map(h => String(h).trim().toLowerCase());
-  for (const a of aliases) { const i = lower.indexOf(a.toLowerCase()); if (i !== -1) return i; }
-  return -1;
-}
-async function batchGetRows(
-  sheets: ReturnType<typeof google.sheets>,
-  spreadsheetId: string,
-  ranges: string[],
-  valueRenderOption: "FORMULA" | "UNFORMATTED_VALUE"
-) {
-  const resp = await sheets.spreadsheets.values.batchGet({
-    spreadsheetId, ranges, valueRenderOption, dateTimeRenderOption: "FORMATTED_STRING"
-  });
-  return (resp.data.valueRanges || []).map(vr => vr.values || []);
+/* ============== Sheets olvasó ============== */
+/** Elfogadott munkalap-nevek (kisbetű + szóköz nélkül összevetve) */
+const WANTED_NORMALIZED = new Set([
+  "banggood",
+  "banggoodunique",
+  "bgunique",           // ha így hívod
+  "geekbuyingunique",
+]);
+
+function normalizeTitle(t: string) {
+  return t.toLowerCase().replace(/\s+/g, "");
 }
 
+/** Oszlopok: A image, B name, D link, G price, H code, J wh, M end, N updated */
 async function fetchSheetsDeals(): Promise<Deal[]> {
   if (!SPREADSHEET_ID || !GOOGLE_APPLICATION_CREDENTIALS_JSON) return [];
-  if (SHEETS_CACHE && Date.now() - SHEETS_CACHE.ts < SHEETS_TTL_MS) { if (DEBUG === "1") console.log("[SHEETS] cache hit"); return SHEETS_CACHE.items; }
+  if (SHEETS_CACHE && Date.now() - SHEETS_CACHE.ts < SHEETS_TTL_MS) return SHEETS_CACHE.items;
 
   const creds = sanitizeCreds(GOOGLE_APPLICATION_CREDENTIALS_JSON!);
-  const jwt = new google.auth.JWT(creds.client_email, undefined, creds.private_key, ["https://www.googleapis.com/auth/spreadsheets.readonly"]);
+  const jwt = new google.auth.JWT(
+    creds.client_email,
+    undefined,
+    creds.private_key,
+    ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+  );
   await jwt.authorize();
   const sheets = google.sheets({ version: "v4", auth: jwt });
 
-  // 0) Munkalapok automatikus felismerése
+  // 1) Munkalapok listázása
   const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID! });
-  const titles = (meta.data.sheets || []).map(s => s.properties?.title).filter(Boolean) as string[];
-  // Opcionálisan priorizáljuk a BG/Geek/Aliexpress lapokat, de végül mindet lekérjük
-  const ranges = titles.map(t => `'${t.replace(/'/g, "''")}'!A:Z`);
-  if (DEBUG === "1") console.log("[SHEETS] ranges:", ranges);
-
-  // 1) FORMULA (IMAGE képlet miatt) + 2) RAW fallback
-  const rowsF = await batchGetRows(sheets, SPREADSHEET_ID!, ranges, "FORMULA");
-  const rowsU = await batchGetRows(sheets, SPREADSHEET_ID!, ranges, "UNFORMATTED_VALUE");
+  const titles = (meta.data.sheets || [])
+    .map(s => s.properties?.title || "")
+    .filter(Boolean)
+    .filter(t => WANTED_NORMALIZED.has(normalizeTitle(t)));
 
   const out: Deal[] = [];
-  for (let k = 0; k < ranges.length; k++) {
-    const rf = rowsF[k] || [], ru = rowsU[k] || [];
-    if (!rf.length && !ru.length) continue;
 
-    const header = (rf[0] || ru[0] || []).map((h: any) => String(h));
-    const iImage = findIdx(header, ["Image", "Kép"]);
-    const iName  = findIdx(header, ["Product name","Name","Title"]);
-    const iLink  = findIdx(header, ["Link","URL"]);
-    const iOrig  = findIdx(header, ["Original price","Original price (no data)"]);
-    const iPrice = findIdx(header, ["Coupon price","Price"]);
-    const iCode  = findIdx(header, ["Coupon code","Code","ProductID"]);
-    const iWh    = findIdx(header, ["Warehouse","WH"]);
-    const iCats  = findIdx(header, ["Categories","Tags"]);
-    const iStart = findIdx(header, ["Start time","Start"]);
-    const iEnd   = findIdx(header, ["End time","End","Expiry","Expire"]);
-    const iUpd   = findIdx(header, ["Update time","Updated"]);
+  // 2) Csak a kiválasztott lapokat kérjük le (A:N), nyers értékekkel
+  for (const t of titles) {
+    const range = `'${t.replace(/'/g, "''")}'!A:N`;
+    const resp = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID!,
+      range,
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    });
 
-    // csak akkor dolgozzuk fel a lapot, ha legalább name+link megvan
-    if (iName < 0 || iLink < 0) continue;
+    const rows = resp.data.values || [];
+    if (rows.length < 2) continue; // fejléc + legalább 1 adat
 
-    for (let r = 1; r < Math.max(rf.length, ru.length); r++) {
-      const rowF = rf[r] || [], rowU = ru[r] || [];
+    // rögzített indexek a te táblád szerint
+    const I = {
+      image: 0,  // A
+      name: 1,   // B
+      link: 3,   // D
+      price: 6,  // G
+      code: 7,   // H
+      wh: 9,     // J
+      end: 12,   // M
+      upd: 13,   // N
+    };
 
-      const title = iName >= 0 ? (rowF[iName] ?? rowU[iName]) : undefined;
-      const link  = iLink >= 0 ? (rowF[iLink] ?? rowU[iLink]) : undefined;
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r] || [];
+      const title = row[I.name];
+      const link  = row[I.link];
       if (!title || !link) continue;
 
-      let imgUrl: string | undefined;
-      if (iImage >= 0) {
-        const imgRawF = rowF[iImage]; const imgRawU = rowU[iImage];
-        const f = imgRawF ? extractImageUrl(imgRawF) : undefined;
-        const u = imgRawU && String(imgRawU).startsWith("http") ? String(imgRawU) : undefined;
-        imgUrl = f || u;
-      }
+      // Kép: csak akkor állítjuk be, ha tényleg URL van az A oszlopban
+      const img0 = row[I.image];
+      const image = normalizeUrl(img0);
 
-      const startIso = iStart >= 0 ? toISO(rowF[iStart] ?? rowU[iStart]) : undefined;
-      const endIso   = iEnd   >= 0 ? toISO(rowF[iEnd]   ?? rowU[iEnd])   : undefined;
-      const notExpired = !endIso || new Date(endIso).getTime() > Date.now();
-      if (!notExpired) continue;
-
-      const orig  = iOrig  >= 0 ? parseMoney(rowF[iOrig]  ?? rowU[iOrig])  : undefined;
-      const price = iPrice >= 0 ? parseMoney(rowF[iPrice] ?? rowU[iPrice]) : undefined;
-      const code  = iCode  >= 0 ? (rowF[iCode] ?? rowU[iCode]) : undefined;
-      const wh    = iWh    >= 0 ? (rowF[iWh]   ?? rowU[iWh])   : undefined;
-      const cats  = iCats  >= 0 && (rowF[iCats] ?? rowU[iCats])
-        ? String(rowF[iCats] ?? rowU[iCats]).split(",").map(s => s.trim()).filter(Boolean)
-        : [];
-      const upd   = iUpd   >= 0 ? toISO(rowF[iUpd] ?? rowU[iUpd]) : undefined;
-
-      const safeLink = normalizeUrl(String(link)) || String(link);
-      const safeImg  = imgUrl ? (normalizeUrl(imgUrl) || imgUrl) : undefined;
-
-      out.push({
-        id: `sheets:${crypto.createHash("md5").update(`${ranges[k]}|${safeLink}|${code || ""}`).digest("hex")}`,
+      const deal: Deal = {
+        id: `sheets:${crypto.createHash("md5").update(`${t}|${link}|${row[I.code] || ""}`).digest("hex")}`,
         src: "sheets",
         title: String(title),
-        image: safeImg,
-        url: safeLink,
-        price, orig,
-        cur: "USD",
-        code: code || undefined,
-        wh: wh || undefined,
-        start: startIso,
-        end: endIso,
-        updated: upd,
-        tags: cats
-      });
+        url: normalizeUrl(String(link)) || String(link),
+        image: image,                         // ha nincs URL, ez undefined marad → a frontend "no picture"-t mutat
+        price: parseMoney(row[I.price]),
+        orig: undefined,                      // az E/F oszlopban nálad "no data" – kihagyjuk
+        cur: "USD",                           // Banggood/Geekbuying kuponár USD
+        code: row[I.code] ? String(row[I.code]) : undefined,
+        wh: row[I.wh] ? String(row[I.wh]) : undefined,
+        start: undefined,
+        end: row[I.end] ? toISO(row[I.end]) : undefined,
+        updated: row[I.upd] ? toISO(row[I.upd]) : undefined,
+        tags: [],
+      };
+
+      out.push(deal);
     }
   }
 
   const items = dedupe(out);
   SHEETS_CACHE = { items, ts: Date.now() };
-  if (DEBUG === "1") console.log(`[SHEETS] parsed items: ${items.length}`);
   return items;
 }
 
-/* ======================== Handler ======================== */
-let LAST_JSON = ""; let LAST_ETAG = "";
+/* ============== Handler ============== */
+let LAST_JSON = "";
+let LAST_ETAG = "";
+
 export const handler: Handler = async (event) => {
   try {
     const qs = new URLSearchParams(event.queryStringParameters || {});
@@ -292,27 +202,17 @@ export const handler: Handler = async (event) => {
     const cursor = qs.get("cursor");
     const q = (qs.get("q") || "").toLowerCase();
     const whFilter = (qs.get("wh") || "").toUpperCase();
-    const srcFilter = (qs.get("src") || "").toLowerCase();
     const minPrice = qs.get("minPrice") ? Number(qs.get("minPrice")) : undefined;
     const maxPrice = qs.get("maxPrice") ? Number(qs.get("maxPrice")) : undefined;
 
-    const allRaw = await Promise.all([
-      fetchSheetsDeals().catch((e) => { if (DEBUG === "1") console.error("[SHEETS] err", e?.message); return []; }),
-      fetchBanggoodDeals().catch((e) => { if (DEBUG === "1") console.error("[BG] err", e?.message); return []; }),
-    ]);
-    let all = dedupe(allRaw.flat());
+    // Csak a három lapból dolgozunk
+    let all = await fetchSheetsDeals();
 
-    if (all.length === 0) {
-      all = [{ id: "demo-1", src: "sheets", title: "BlitzWolf BW-XYZ 65W GaN töltő", url: "https://example.com",
-        price: 39.99, orig: 59.99, cur: "USD", code: "BGDEMO", wh: "EU",
-        end: toISO(Date.now() + 36e5 * 24), updated: toISO(Date.now()), tags: ["gan","charger","blitzwolf"] }];
-    }
-
+    // Szűrések
     if (q) {
       all = all.filter(d =>
         d.title.toLowerCase().includes(q) ||
-        (d.code || "").toLowerCase().includes(q) ||
-        (d.tags || []).some(t => t.toLowerCase().includes(q))
+        (d.code || "").toLowerCase().includes(q)
       );
     }
     if (whFilter) {
@@ -321,36 +221,40 @@ export const handler: Handler = async (event) => {
         (whFilter === "EU" && (d.wh || "").toUpperCase() !== "CN")
       );
     }
-    if (srcFilter) all = all.filter(d => d.src === srcFilter);
     if (typeof minPrice === "number") all = all.filter(d => (d.price ?? Infinity) >= minPrice);
     if (typeof maxPrice === "number") all = all.filter(d => (d.price ?? 0) <= maxPrice);
 
+    // Rangsorolás, lapozás
     const scored = all.map(d => ({ d, score: scoreDeal(d) }))
-      .sort((a, b) => b.score - a.score).map(x => x.d);
+      .sort((a, b) => b.score - a.score)
+      .map(x => x.d);
 
     const start = cursor ? parseInt(cursor, 10) || 0 : 0;
     const page = scored.slice(start, start + limit);
     const nextCursor = start + limit < scored.length ? String(start + limit) : null;
 
     const payload = { count: scored.length, items: page, nextCursor, updatedAt: new Date().toISOString() };
-    const json = JSON.stringify(payload); const etg = etagOf(json);
+    const json = JSON.stringify(payload);
+    const etg = etagOf(json);
 
     if (ifNoneMatch && ifNoneMatch === etg) {
       return { statusCode: 304, headers: { ETag: etg, "Cache-Control": "public, max-age=600, stale-while-revalidate=60" }, body: "" };
     }
 
-    LAST_JSON = json; LAST_ETAG = etg;
+    LAST_JSON = json;
+    LAST_ETAG = etg;
+
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600, stale-while-revalidate=60", "ETag": etg },
-      body: json
+      body: json,
     };
   } catch (e: any) {
     if (LAST_JSON) {
       return {
         statusCode: 200,
         headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", "ETag": LAST_ETAG, "X-Fallback": "snapshot" },
-        body: LAST_JSON
+        body: LAST_JSON,
       };
     }
     return { statusCode: 500, body: JSON.stringify({ error: e?.message || "Server error" }) };

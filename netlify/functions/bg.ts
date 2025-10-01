@@ -4,96 +4,100 @@ import type { Handler } from "@netlify/functions";
 import crypto from "crypto";
 import axios from "axios";
 
-// Típusok (változatlan)
-type Deal = { id: string; src: "banggood"; store: "Banggood"; title: string; url: string; short?: string; image?: string; price?: number; orig?: number; cur?: string; code?: string; wh?: string; start?: string; end?: string; updated?: string; };
-
-// Környezeti változók (változatlan)
-const { BANGGOOD_API_KEY, BANGGOOD_API_SECRET } = process.env;
-
-// Cache és segédfüggvények (változatlan)
-let ACCESS_TOKEN: { token: string; ts: number } | null = null;
-const TOKEN_TTL = 50 * 60 * 1000;
+// Típusok és alap segédfüggvények (változatlan)
+type Deal = { id: string; src: "banggood"; store: "Banggood"; title: string; url: string; image?: string; price?: number; orig?: number; cur?: string; code?: string; wh?: string; updated?: string; };
 const md5 = (s: string) => crypto.createHash("md5").update(s).digest("hex");
-function toISO(d?: string | number | Date) { if (!d) return undefined; const dt = new Date(d); return isNaN(dt.getTime()) ? undefined : dt.toISOString(); }
-function parseMoney(v: any): number | undefined { if (v == null) return undefined; let s = String(v).trim(); if (!s) return undefined; s = s.replace(/\u00A0/g, " ").replace(/\s+/g, ""); const hasComma = s.includes(","), hasDot = s.includes("."); if (hasComma && !hasDot) s = s.replace(",", "."); else if (hasComma && hasDot) { if (s.lastIndexOf(",") > s.lastIndexOf(".")) s = s.replace(/\./g, "").replace(",", "."); else s = s.replace(/,/g, ""); } s = s.replace(/[^\d.]/g, ""); const parts = s.split("."); if (parts.length > 2) { const dec = parts.pop(); s = parts.join("") + "." + dec; } const num = parseFloat(s); return Number.isFinite(num) ? num : undefined; }
+function toISO(d?: any) { if (!d) return undefined; const dt = new Date(d); return isNaN(dt.getTime()) ? undefined : dt.toISOString(); }
+function parseMoney(v: any): number | undefined { if (v==null) return undefined; let s=String(v).trim().replace(/[^\d.,]/g,'').replace(',','.'); const n=parseFloat(s); return isFinite(n)?n:undefined; }
 function normalizeUrl(u?: string): string | undefined { if (!u) return undefined; const https = u.replace(/^http:/i, "https:"); try { return encodeURI(https); } catch { return https; } }
 function sign(params: Record<string, any>) { const sorted = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join("&"); return md5(sorted); }
 
-// Banggood API specifikus függvények (változatlan)
-async function getAccessToken(): Promise<string> {
-    if (!BANGGOOD_API_KEY || !BANGGOOD_API_SECRET) throw new Error("BG API env hiányzik");
+// Access Token (változatlan)
+let ACCESS_TOKEN: { token: string; ts: number } | null = null;
+const TOKEN_TTL = 50 * 60 * 1000;
+async function getAccessToken(key:string, secret:string): Promise<string> {
     const now = Date.now();
     if (ACCESS_TOKEN && (now - ACCESS_TOKEN.ts) < TOKEN_TTL) return ACCESS_TOKEN.token;
     const timestamp = Math.floor(now / 1000);
     const noncestr = Math.random().toString(36).slice(2);
-    const signature = sign({ api_key: BANGGOOD_API_KEY, api_secret: BANGGOOD_API_SECRET, noncestr, timestamp });
-    const { data } = await axios.get("https://affapi.banggood.com/getAccessToken", { params: { api_key: BANGGOOD_API_KEY, noncestr, timestamp, signature }, timeout: 8000 });
+    const signature = sign({ api_key: key, api_secret: secret, noncestr, timestamp });
+    const { data } = await axios.get("https://affapi.banggood.com/getAccessToken", { params: { api_key: key, noncestr, timestamp, signature } });
     const token = data?.result?.access_token;
-    if (!token) throw new Error("Nem kaptunk access_token-t");
+    if (!token) throw new Error("BG Access Token hiba");
     ACCESS_TOKEN = { token, ts: now };
     return token;
 }
 
 // Mapping függvények (változatlan)
 function mapProductToDeal(p: any): Deal { return { id: `bg-prod:${p.product_id}`, src: "banggood", store: "Banggood", title: p.product_name, url: p.product_url, image: normalizeUrl(p.view_image), price: parseMoney(p.product_coupon_price ?? p.product_price), orig: parseMoney(p.product_price), cur: "USD", code: p.coupon_code || undefined, updated: toISO(Date.now()) }; }
-function mapCouponToDeal(c: any): Deal { return { id: `bg-coup:${md5(c.promo_link_standard)}`, src: "banggood", store: "Banggood", title: (c.promo_link_standard || "").split("/").pop()?.replace(/-/g, " ") || c.only_for, url: c.promo_link_standard, short: (c.promo_link_short || "").replace(/^http:/i, "https:"), image: normalizeUrl(c.coupon_img), price: parseMoney(c.condition) ?? parseMoney(c.original_price), orig: parseMoney(c.original_price), cur: c.currency || "USD", code: c.coupon_code, wh: c.warehouse, end: toISO(c.coupon_date_end), updated: toISO(Date.now()) }; }
+function mapCouponToDeal(c: any): Deal { return { id: `bg-coup:${md5(c.promo_link_standard)}`, src: "banggood", store: "Banggood", title: c.only_for, url: c.promo_link_standard, image: normalizeUrl(c.coupon_img), price: parseMoney(c.condition) ?? parseMoney(c.original_price), orig: parseMoney(c.original_price), cur: c.currency || "USD", code: c.coupon_code, wh: c.warehouse, updated: toISO(Date.now()) }; }
 
-// Handler - ÚJ, EGYSZERŰSÍTETT LOGIKÁVAL
+
 export const handler: Handler = async (event) => {
+    // ---- DIAGNOSZTIKA ELEJE ----
+    const BANGGOOD_API_KEY = process.env.BANGGOOD_API_KEY;
+    const BANGGOOD_API_SECRET = process.env.BANGGOOD_API_SECRET;
+    
+    console.log(`[bg.ts] Handler indul. API kulcs betöltve: ${!!BANGGOOD_API_KEY}, Secret betöltve: ${!!BANGGOOD_API_SECRET}`);
+    if (!BANGGOOD_API_KEY || !BANGGOOD_API_SECRET) {
+        return { statusCode: 500, body: JSON.stringify({ error: "Banggood API kulcsok hiányoznak a szerver oldalon!" }) };
+    }
+    // ---- DIAGNOSZTIKA VÉGE ----
+
     try {
         const qs = new URLSearchParams(event.queryStringParameters || {});
         const q = (qs.get("q") || "").trim();
         const wantTop = ["1", "true", "yes"].includes((qs.get("top") || "").toLowerCase());
         const limit = parseInt(qs.get("limit") || "100", 10);
 
-        console.log(`[bg.ts] Handler elindult. Keresőszó: "${q}", Top kérés: ${wantTop}`);
-
-        const token = await getAccessToken();
+        console.log(`[bg.ts] Mód: Keresőszó="${q}", Top kérés=${wantTop}`);
+        
+        const token = await getAccessToken(BANGGOOD_API_KEY, BANGGOOD_API_SECRET);
         let finalDeals: Deal[] = [];
 
-        // 1. ESET: Van keresőszó -> AGRESSZÍV PÁRHUZAMOS KERESÉS
+        // 1. ESET: Keresés van
         if (q) {
-            console.log(`[bg.ts] MÓD: KERESÉS a következőre: "${q}"`);
+            console.log(`[bg.ts] Termékkeresés indul a(z) "/product/list"-en...`);
+            let productResults = [];
+            try {
+                const { data } = await axios.get("https://affapi.banggood.com/product/list", { headers: { "access-token": token }, params: { keyword: q, page: 1 } });
+                productResults = data?.result?.product_list || [];
+                console.log(`[bg.ts] "/product/list" API válasz: ${productResults.length} db termék`);
+                finalDeals.push(...productResults.map(mapProductToDeal));
+            } catch (e: any) {
+                console.error("[bg.ts] Hiba a /product/list hívása közben:", e.message);
+            }
 
-            const [productResults, couponResults] = await Promise.all([
-                axios.get("https://affapi.banggood.com/product/list", { headers: { "access-token": token }, params: { keyword: q, page: 1 } }).then(r => r.data?.result?.product_list || []),
-                axios.get("https://affapi.banggood.com/coupon/list", { headers: { "access-token": token }, params: { type: 2, page: 1 } }).then(r => r.data?.result?.coupon_list || [])
-            ]);
-
-            console.log(`[bg.ts] Nyers eredmény: ${productResults.length} termék, ${couponResults.length} kupon`);
-
-            const dealsFromProducts = productResults.map(mapProductToDeal);
-            const dealsFromCoupons = couponResults
-                .filter((c: any) => (c.only_for || "").toLowerCase().includes(q.toLowerCase()))
-                .map(mapCouponToDeal);
-            
-            console.log(`[bg.ts] Feldolgozott eredmény: ${dealsFromProducts.length} termék, ${dealsFromCoupons.length} releváns kupon`);
-
-            finalDeals = [...dealsFromProducts, ...dealsFromCoupons];
+            console.log(`[bg.ts] Kuponkeresés indul a(z) "/coupon/list"-en...`);
+            let couponResults = [];
+            try {
+                const { data } = await axios.get("https://affapi.banggood.com/coupon/list", { headers: { "access-token": token }, params: { type: 2, page: 1 } });
+                couponResults = data?.result?.coupon_list || [];
+                const relevantCoupons = couponResults.filter((c: any) => (c.only_for || "").toLowerCase().includes(q.toLowerCase()));
+                console.log(`[bg.ts] "/coupon/list" API válasz: ${couponResults.length} kupon, ebből releváns: ${relevantCoupons.length} db`);
+                finalDeals.push(...relevantCoupons.map(mapCouponToDeal));
+            } catch(e: any) {
+                console.error("[bg.ts] Hiba a /coupon/list hívása közben:", e.message);
+            }
         }
-        // 2. ESET: Nincs keresőszó, de TOP termékeket kérnek
+        // 2. ESET: Top termékek kérése
         else if (wantTop) {
-            console.log("[bg.ts] MÓD: TOP TERMÉKEK");
+            console.log(`[bg.ts] Top termékek kérése a(z) "/product/list"-ről (sort=hot)`);
             const { data } = await axios.get("https://affapi.banggood.com/product/list", { headers: { "access-token": token }, params: { keyword: "", page: 1, sort: "hot" } });
             const rawProducts = data?.result?.product_list || [];
-            console.log(`[bg.ts] Nyers TOP eredmény: ${rawProducts.length} termék`);
+            console.log(`[bg.ts] Top termékek API válasz: ${rawProducts.length} db`);
             finalDeals = rawProducts.slice(0, limit).map(mapProductToDeal);
         }
 
-        // Deduplikáció
         const seen = new Set<string>();
-        const uniqueDeals: Deal[] = [];
-        for (const d of finalDeals) {
-            const key = `${d.url}|${d.code || ""}`;
-            if (!seen.has(key)) { seen.add(key); uniqueDeals.push(d); }
-        }
-        console.log(`[bg.ts] Végleges találatok száma: ${uniqueDeals.length}`);
+        const uniqueDeals = finalDeals.filter(d => { const key = `${d.url}|${d.code||""}`; if (seen.has(key)) return false; seen.add(key); return true; });
+        console.log(`[bg.ts] Végleges, egyedi találatok: ${uniqueDeals.length}`);
         
-        const payload = { count: uniqueDeals.length, items: uniqueDeals, nextCursor: null, updatedAt: new Date().toISOString(), meta: { warehouses: [], stores: ["Banggood"] } };
+        const payload = { count: uniqueDeals.length, items: uniqueDeals, meta: {} };
         return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) };
 
     } catch (e: any) {
-        console.error("[bg.ts] VÉGZETES HIBA:", e.message);
-        return { statusCode: 500, body: JSON.stringify({ error: e.message || "Server error" }) };
+        console.error("[bg.ts] Végzetes hiba a handlerben:", e.message);
+        return { statusCode: 500, body: JSON.stringify({ error: e.message || "Ismeretlen szerverhiba" }) };
     }
 };

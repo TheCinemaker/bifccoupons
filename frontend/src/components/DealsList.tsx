@@ -44,29 +44,27 @@ export function DealsList({ filters }: { filters: any }) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-    let alive = true;
-    setLoading(true);
+  let alive = true;
+  setLoading(true);
 
-    const qs = new URLSearchParams(
-      Object.entries(filters).filter(([, v]) => v !== undefined && v !== "")
-    ).toString();
+  const qs = new URLSearchParams(
+    Object.entries(filters).filter(([, v]) => v !== undefined && v !== "")
+  ).toString();
 
-    // cache-buster, hogy mindig frisset kapjunk
-    const url = `/.netlify/functions/coupons?${qs}${qs ? "&" : ""}_=${Date.now()}`;
+  const endpoint = filters.source === "banggood" ? "bg" : "coupons";
+  const url = `/.netlify/functions/${endpoint}?${qs}${qs ? "&" : ""}_=${Date.now()}`;
 
-    fetch(url, { headers: { "Cache-Control": "no-cache" } })
-      .then((r) => r.json())
-      .then((d) => {
-        if (!alive) return;
-        setItems(d.items || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+  fetch(url, { headers: { "Cache-Control": "no-cache" } })
+    .then((r) => r.json())
+    .then((d) => {
+      if (!alive) return;
+      setItems(d.items || []);
+      setLoading(false);
+    })
+    .catch(() => setLoading(false));
 
-    return () => {
-      alive = false;
-    };
-  }, [JSON.stringify(filters)]);
+  return () => { alive = false; };
+}, [JSON.stringify(filters)]);
 
   async function copyCode(e: React.MouseEvent, deal: Deal) {
     e.preventDefault();

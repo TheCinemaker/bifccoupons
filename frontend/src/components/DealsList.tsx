@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 
+// Típusok és segédfüggvények
 type Deal = {
   id: string;
   src: string;
@@ -32,16 +33,20 @@ const FALLBACK_SVG =
 
 export function DealsList({ filters }: { filters: any }) {
   const [items, setItems] = useState<Deal[]>([]);
-  const [loading, setLoading] = useState(true); // Alapból töltsön, mert az alapnézetet is be kell tölteni
+  const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     const fetchDeals = async () => {
       setLoading(true);
+      setItems([]); // Töröljük a régi elemeket, hogy tiszta lappal induljunk
+
       try {
         const q = (filters.q || "").trim();
         let finalItems: Deal[] = [];
+        
+        console.log(`--- [DealsList] Új futás | Keresőszó: "${q}" | Bolt: "${filters.store || 'Nincs'}" ---`);
 
         // =======================================================
         //  PRIORITÁSI LOGIKA
@@ -49,95 +54,107 @@ export function DealsList({ filters }: { filters: any }) {
 
         // 1. SZABÁLY: A KERESŐ MINDENT VISZ
         if (q) {
-          const qs = new URLSearchParams(filters as any).toString();
+          console.log(`[DealsList] MÓD: KERESÉS`);
+          
+          const qs = new URLSearchParams({ q }).toString();
           
           const urls: string[] = [
             `/.netlify/functions/coupons?${qs}`,
             `/.netlify/functions/bg?catalog=1&${qs}`,
             `/.netlify/functions/ali?${qs}`
           ];
+          console.log("[DealsList] Párhuzamos Fetch URL-ek:", urls);
 
           const results = await Promise.all(
             urls.map(u =>
-              fetch(u).then(r => (r.ok ? r.json() : { items: [] })).catch(() => ({ items: [] }))
+              fetch(u).then(r => (r.ok ? r.json() : { items: [] })).catch((err) => {
+                console.error(`[DealsList] Hiba a(z) ${u} fetchelése közben:`, err);
+                return { items: [] };
+              })
             )
           );
           
-          let merged: Deal[] = results.flatMap(r => r.items || []);
-
-          if (filters.store) {
-            merged = merged.filter(d => (d.store || d.src)?.toLowerCase() === filters.store.toLowerCase());
-          }
-          finalItems = merged;
+          finalItems = results.flatMap(r => r.items || []);
+          console.log(`[DealsList] Összesített találat (szűrés előtt): ${finalItems.length} db`);
 
         // 2. SZABÁLY: NINCS KERESÉS, DE VAN BOLT VÁLASZTVA
         } else if (filters.store) {
-            switch (filters.store) {
-                case "AliExpress":
-                    const aliUrl = `/.netlify/functions/ali?top=1&limit=200`;
-                    const aliRes = await fetch(aliUrl).then(r => r.json());
-                    finalItems = aliRes.items || [];
-                    break;
-                case "Banggood":
-                case "Geekbuying":
-                case "Gshopper":
-                    const sheetUrl = `/.netlify/functions/coupons?store=${filters.store}&limit=200`;
-                    const sheetRes = await fetch(sheetUrl).then(r => r.json());
-                    finalItems = sheetRes.items || [];
-                    break;
-            }
-        // 3. SZABÁLY (ÚJ): ALAPÉRTELMEZETT NÉZET - NINCS KERESŐ ÉS NINCS BOLT
+          console.log(`[DealsList] MÓD: BOLT NÉZET`);
+          let url = '';
+          switch (filters.store) {
+            case "AliExpress":
+              url = `/.netlify/functions/ali?top=1&limit=200`;
+              break;
+            case "Banggood":
+            case "Geekbuying":
+            case "Gshopper":
+              url = `/.netlify/functions/coupons?store=${filters.store}&limit=200`;
+              break;
+          }
+          if (url) {
+            console.log("[DealsList] Fetching URL:", url);
+            const res = await fetch(url).then(r => r.json());
+            finalItems = res.items || [];
+          }
+
+        // 3. SZABÁLY: ALAPÉRTELMEZETT NÉZET (oldalbetöltés)
         } else {
-            // Cél: Minden forrásból a legjobb 3-3 ajánlatot mutatjuk ízelítőnek.
-            const defaultUrls = [
-                // Sheets-alapú boltok (a 'coupons' végpont a belső rendezése miatt a legjobbakat adja vissza)
-                '/.netlify/functions/coupons?store=Banggood&limit=3',
-                '/.netlify/functions/coupons?store=Geekbuying&limit=3',
-                '/.netlify/functions/coupons?store=Gshopper&limit=3',
-                // Live API-k (feltételezve, hogy támogatják a top=1 és limit paramétert)
-                '/.netlify/functions/ali?top=1&limit=3',
-                '/.netlify/functions/bg?top=1&limit=3'
-            ];
-            
-            const results = await Promise.all(
-                defaultUrls.map(u =>
-                fetch(u).then(r => (r.ok ? r.json() : { items: [] })).catch(() => ({ items: [] }))
-                )
-            );
-            
-            finalItems = results.flatMap(r => r.items || []);
+          console.log("[DealsList] MÓD: ALAPÉRTELMEZETT NÉZET (ízelítő)");
+          const defaultUrls = [
+            '/.netlify/functions/coupons?store=Banggood&limit=3',
+            '/.netlify/functions/coupons?store=Geekbuying&limit=3',
+            '/.netlify/functions/coupons?store=Gshopper&limit=3',
+            '/.netlify/functions/ali?top=1&limit=3',
+            '/.netlify/functions/bg?top=1&limit=3'
+          ];
+          console.log("[DealsList] Alapnézet URL-ek:", defaultUrls);
+
+          const results = await Promise.all(
+            defaultUrls.map(u => fetch(u).then(r => (r.ok ? r.json() : { items: [] })).catch(() => ({ items: [] })))
+          );
+          finalItems = results.flatMap(r => r.items || []);
         }
 
+        console.log(`[DealsList] Találatok feldolgozás előtt: ${finalItems.length} db`);
+
         // =======================================================
-        //  UTÓFELDOLGOZÁS (Dedupe, Rendezés)
+        //  UTÓFELDOLGOZÁS (Frontend oldali szűrés, Dedupe, Rendezés)
         // =======================================================
         
-        const seen = new Set<string>();
-        const uniq: Deal[] = [];
-        for (const d of finalItems) {
-          const key = `${d.url}|${d.code || ""}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            uniq.push(d);
+        let processedItems = finalItems;
+
+        // Frontend oldali szűrés a 'store' és 'wh' filterekre, ha van keresőszó
+        if (q) {
+          if (filters.store) {
+            processedItems = processedItems.filter(d => (d.store || d.src)?.toLowerCase() === filters.store.toLowerCase());
+          }
+          if (filters.wh) {
+            processedItems = processedItems.filter(d => (d.wh || "")?.toLowerCase() === filters.wh.toLowerCase());
           }
         }
+        
+        // Dedupe
+        const seen = new Set<string>();
+        const uniq: Deal[] = [];
+        for (const d of processedItems) {
+          const key = `${d.url}|${d.code || ""}`;
+          if (!seen.has(key)) { seen.add(key); uniq.push(d); }
+        }
+        console.log(`[DealsList] Végleges, egyedi találatok száma: ${uniq.length} db`);
 
+        // Rendezés
         const s = filters.sort;
         if (s === "price_asc") uniq.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
         else if (s === "price_desc") uniq.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
-        else if (s === "store_asc" || s === "store_desc") {
-          uniq.sort((a, b) => s === "store_asc"
-            ? (a.store || a.src || "").localeCompare(b.store || a.src || "")
-            // @ts-ignore
-            : (b.store || b.src || "").localeCompare(a.store || a.src || "")
-          );
-        }
-
+        else if (s === "store_asc") uniq.sort((a, b) => (a.store || a.src || "").localeCompare(b.store || b.src || ""));
+        else if (s === "store_desc") uniq.sort((a, b) => (b.store || b.src || "").localeCompare(a.store || a.src || ""));
+        
         if (alive) {
           setItems(uniq);
         }
+
       } catch (error) {
-        console.error("Hiba a deal-ek betöltése közben:", error);
+        console.error("[DealsList] VÉGZETES HIBA a fetchDeals logikában:", error);
         if (alive) setItems([]);
       } finally {
         if (alive) setLoading(false);

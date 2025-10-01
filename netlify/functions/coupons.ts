@@ -6,7 +6,7 @@ import { google } from "googleapis";
 type Deal = {
   id: string;
   src: "sheets";
-  store: "Banggood" | "Geekbuying" | "GShopper";
+  store: "Banggood" | "Geekbuying";
   title: string;
   url: string;
   image?: string;
@@ -33,7 +33,6 @@ const SHEETS: { title: string; store: "Banggood" | "Geekbuying" | "Geekbuying" }
   { title: "Geekbuying Unique", store: "Geekbuying" },
   { title: "Geekbuying",         store: "Geekbuying"   },
   { title: "BG Unique HUN",    store: "Banggood"   },
-  { title: "Gshopper",    store: "Gshopper"   },
 ];
 
 // oszlop indexek (0-alapú)

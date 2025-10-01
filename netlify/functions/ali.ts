@@ -11,12 +11,11 @@ function parseMoney(v: any): number | undefined { if (v==null) return; let s=Str
 function normalizeUrl(u?: string): string | undefined { if(!u) return; const p=u.startsWith("//")?`https:${u}`:u; return encodeURI(p.replace(/^http:/i,"https:")); }
 function mapAliItem(p: any): Deal { return { id: `ali:${p.product_id}`, src:"aliexpress", store:"AliExpress", title:p.product_title, url:p.promotion_link, image:normalizeUrl(p.product_main_image_url), price:parseMoney(p.target_sale_price), orig:parseMoney(p.original_price), cur:p.target_sale_price_currency, code:undefined, wh:p.ship_from_country, updated:toISO(Date.now()) }; }
 
-// ===== Handler (HELYES ALÁÍRÁSSAL) =====
+// ===== Handler (VÉGLEGES, JAVÍTOTT VÁLASZKEZELÉSSEL) =====
 export const handler: Handler = async (event) => {
     const { ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET, ALIEXPRESS_TRACKING_ID } = process.env;
 
     if (!ALIEXPRESS_APP_KEY || !ALIEXPRESS_APP_SECRET || !ALIEXPRESS_TRACKING_ID) {
-        console.error("[ali.ts] API kulcsok hiányoznak!");
         return { statusCode: 500, body: JSON.stringify({ error: "AliExpress API konfigurációs hiba." }) };
     }
 
@@ -40,8 +39,7 @@ export const handler: Handler = async (event) => {
             apiParams.keywords = q;
             apiParams.page_size = searchLimit;
         } else if (wantTop) {
-            method = "aliexpress.affiliate.product.query";
-            apiParams.sort = "LAST_VOLUME_DESC";
+            method = "aliexpress.affiliate.hotproduct.query"; // Visszatettem a hotproductot, mert most már tudjuk, hogy működik
             apiParams.page_size = topLimit;
         }
 
@@ -49,7 +47,7 @@ export const handler: Handler = async (event) => {
             return { statusCode: 200, body: JSON.stringify({ count: 0, items: [] }) };
         }
 
-        // --- API Hívás Logika (A Case 1 DOKUMENTÁCIÓ ALAPJÁN) ---
+        // --- API Hívás Logika (A helyes aláírással) ---
         const callAliBusinessAPI = async (m: string, p: Record<string, any>) => {
             const commonParams: Record<string, string> = {
                 app_key: ALIEXPRESS_APP_KEY,
@@ -59,29 +57,24 @@ export const handler: Handler = async (event) => {
                 ...Object.fromEntries(Object.entries(p).map(([k, v]) => [k, String(v)])),
             };
 
-            // 1. Lépés: Paraméterek rendezése ASCII szerint
             const sortedKeys = Object.keys(commonParams).sort();
-            
-            // 2. Lépés: Paraméterek és értékek összefűzése
             const stringToSign = sortedKeys.map(key => `${key}${commonParams[key]}`).join("");
-
-            // 3. Lépés: Aláírás generálása (Secret NÉLKÜL a stringben!)
-            const signature = crypto.createHmac("sha256", ALIEXPRESS_APP_SECRET)
-                                    .update(stringToSign)
-                                    .digest("hex")
-                                    .toUpperCase();
+            const signature = crypto.createHmac("sha256", ALIEXPRESS_APP_SECRET).update(stringToSign).digest("hex").toUpperCase();
             
             const finalParams = { ...commonParams, sign: signature };
 
-            // 4. Lépés: HTTP kérés összeállítása a 'sync' végpontra
             const { data } = await axios.get("https://api-sg.aliexpress.com/sync", {
                 params: finalParams,
                 timeout: 8000,
             });
 
+            // ---- EZ A RÉSZ A JAVÍTÁS ----
             if (data?.error_response) throw new Error(data.error_response.sub_msg || data.error_response.msg);
-            const topKey = Object.keys(data)[0];
-            const result = data?.[topKey]?.result;
+
+            // Dinamikusan keressük meg a válasz kulcsot, ami a metódus nevéből van képezve
+            const responseKey = m.replace(/\./g, '_') + '_response';
+            const result = data?.[responseKey]?.result;
+            
             if (!result || result.resp_code !== 200) {
                 console.error("[ali.ts] API válasz hiba. Teljes válasz:", JSON.stringify(data, null, 2));
                 throw new Error(`AliExpress API hiba: ${result?.resp_msg || "Ismeretlen válaszstruktúra"}`);

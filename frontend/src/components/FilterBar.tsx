@@ -1,25 +1,74 @@
 import React from "react";
 
-export function FilterBar({ value, onChange }:{ value:any; onChange:(v:any)=>void }) {
+type Filters = {
+  q?: string;
+  wh?: string;
+  store?: string;
+  sort?: "price_asc" | "price_desc" | "store_asc" | "store_desc";
+  limit?: number;
+};
+
+export function FilterBar({
+  value,
+  onChange,
+  meta,
+}: {
+  value: Filters;
+  onChange: (v: Filters) => void;
+  meta: { warehouses: string[]; stores: string[] };
+}) {
+  const set = (patch: Partial<Filters>) => onChange({ ...value, ...patch });
+
   return (
-    <div className="px-4 py-3 flex gap-2 bg-neutral-950/70 backdrop-blur sticky top-0 z-20 border-b border-neutral-800">
+    <div className="px-4 py-3 flex flex-wrap gap-2 bg-neutral-950/70 backdrop-blur sticky top-0 z-20 border-b border-neutral-800">
       <input
-        className="px-3 py-2 rounded bg-neutral-900 text-white w-full max-w-sm"
+        className="px-3 py-2 rounded bg-neutral-900 text-white w-full sm:max-w-xs"
         placeholder="Keresés… (pl. BlitzWolf, robot)"
         value={value.q || ""}
-        onChange={(e) => onChange({ ...value, q: e.target.value })}
+        onChange={(e) => set({ q: e.target.value })}
       />
+
+      {/* Warehouse – CSAK a J oszlopból jövő értékek */}
       <select
         className="px-3 py-2 rounded bg-neutral-900 text-white"
         value={value.wh || ""}
-        onChange={(e) => onChange({ ...value, wh: e.target.value })}
+        onChange={(e) => set({ wh: e.target.value || undefined })}
       >
         <option value="">Minden raktár</option>
-        <option value="EU">EU</option>
-        <option value="PL">PL</option>
-        <option value="CZ">CZ</option>
-        <option value="ES">ES</option>
-        <option value="CN">CN</option>
+        {meta.warehouses.map((w) => (
+          <option key={w} value={w}>{w}</option>
+        ))}
+      </select>
+
+      {/* Store szűrő */}
+      <select
+        className="px-3 py-2 rounded bg-neutral-900 text-white"
+        value={value.store || ""}
+        onChange={(e) => set({ store: e.target.value || undefined })}
+      >
+        <option value="">Minden bolt</option>
+        {meta.stores.map((s) => (
+          <option key={s} value={s}>{s}</option>
+        ))}
+      </select>
+
+      {/* Rendezés */}
+      <select
+        className="px-3 py-2 rounded bg-neutral-900 text-white"
+        value={value.sort || ""}
+        onChange={(e) =>
+          set({
+            sort:
+              (e.target.value as Filters["sort"]) || undefined,
+          })
+        }
+        title="Rendezés"
+      >
+        <option value="">Alap (okos rangsor)</option>
+        <option value="price_asc">Ár szerint ↑</option>
+        <option value="price_desc">Ár szerint ↓</option>
+        <option value="store_asc">Bolt (A→Z)</option>
+        <option value="store_desc">Bolt (Z→A)</option>
       </select>
     </div>
   );

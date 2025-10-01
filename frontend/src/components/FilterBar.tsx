@@ -7,6 +7,7 @@ type Filters = {
   sort?: "price_asc" | "price_desc" | "store_asc" | "store_desc";
   source?: "sheets" | "banggood";
   limit?: number;
+  catalog?: string; // "1" ha bekapcsolt katalógus fallback BG live módban
 };
 
 export function FilterBar({
@@ -19,11 +20,11 @@ export function FilterBar({
   meta: { warehouses: string[]; stores: string[] };
 }) {
   const set = (patch: Partial<Filters>) => onChange({ ...value, ...patch });
-
   const isBG = value.source === "banggood";
 
   return (
-    <div className="px-4 py-3 flex flex-wrap gap-2 bg-neutral-950/70 backdrop-blur sticky top-0 z-20 border-b border-neutral-800">
+    <div className="px-4 py-3 flex flex-wrap gap-3 bg-neutral-950/70 backdrop-blur sticky top-0 z-20 border-b border-neutral-800">
+      {/* Kereső */}
       <input
         className="px-3 py-2 rounded bg-neutral-900 text-white w-full sm:max-w-xs"
         placeholder="Keresés… (pl. BlitzWolf, robot)"
@@ -35,7 +36,13 @@ export function FilterBar({
       <select
         className="px-3 py-2 rounded bg-neutral-900 text-white"
         value={value.source || "sheets"}
-        onChange={(e) => set({ source: (e.target.value as Filters["source"]) || "sheets", wh: undefined, store: undefined })}
+        onChange={(e) =>
+          set({
+            source: (e.target.value as Filters["source"]) || "sheets",
+            wh: undefined,
+            store: undefined,
+          })
+        }
         title="Adatforrás"
       >
         <option value="sheets">Összesített (Sheets)</option>
@@ -50,7 +57,9 @@ export function FilterBar({
       >
         <option value="">Minden raktár</option>
         {meta.warehouses.map((w) => (
-          <option key={w} value={w}>{w}</option>
+          <option key={w} value={w}>
+            {w}
+          </option>
         ))}
       </select>
 
@@ -64,7 +73,9 @@ export function FilterBar({
       >
         <option value="">Minden bolt</option>
         {meta.stores.map((s) => (
-          <option key={s} value={s}>{s}</option>
+          <option key={s} value={s}>
+            {s}
+          </option>
         ))}
       </select>
 
@@ -72,7 +83,9 @@ export function FilterBar({
       <select
         className="px-3 py-2 rounded bg-neutral-900 text-white"
         value={value.sort || ""}
-        onChange={(e) => set({ sort: (e.target.value as Filters["sort"]) || undefined })}
+        onChange={(e) =>
+          set({ sort: (e.target.value as Filters["sort"]) || undefined })
+        }
         title="Rendezés"
       >
         <option value="">Alap (okos rangsor)</option>
@@ -81,17 +94,6 @@ export function FilterBar({
         <option value="store_asc">Bolt (A→Z)</option>
         <option value="store_desc">Bolt (Z→A)</option>
       </select>
-    </div>
-  );
-}
-
-export function FilterBar({ value, onChange, meta }: { value: Filters; onChange:(v:Filters)=>void; meta:{warehouses:string[]; stores:string[]} }) {
-  const set = (patch: Partial<Filters>) => onChange({ ...value, ...patch });
-  const isBG = value.source === "banggood";
-
-  return (
-    <div className="px-4 py-3 flex flex-wrap gap-3 bg-neutral-950/70 backdrop-blur sticky top-0 z-20 border-b border-neutral-800">
-      {/* kereső + forrás + wh + store + rendezés ... (ahogy korábban) */}
 
       {/* Csak BG live esetén: Katalógus fallback engedélyezése */}
       {isBG && (
@@ -99,8 +101,10 @@ export function FilterBar({ value, onChange, meta }: { value: Filters; onChange:
           <input
             type="checkbox"
             className="accent-amber-500"
-            checked={Boolean((value as any).catalog)}
-            onChange={(e) => set({ ...(value as any), catalog: e.target.checked ? "1" : undefined })}
+            checked={Boolean(value.catalog)}
+            onChange={(e) =>
+              set({ catalog: e.target.checked ? "1" : undefined })
+            }
           />
           Nincs kupon? Mutasd a BG találatokat is
         </label>
@@ -108,4 +112,3 @@ export function FilterBar({ value, onChange, meta }: { value: Filters; onChange:
     </div>
   );
 }
-

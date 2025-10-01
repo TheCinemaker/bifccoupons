@@ -1,9 +1,10 @@
+// frontend/src/components/DealsList.tsx
 import React, { useEffect, useState } from "react";
 
 type Deal = {
   id: string;
-  src: "sheets";
-  store: "Banggood" | "Geekbuying";
+  src: string;
+  store?: string;
   title: string;
   url: string;
   short?: string;
@@ -23,20 +24,12 @@ function formatPrice(v?: number, cur?: string) {
   return `${sym}${v.toFixed(2)}`;
 }
 
-// Beépített SVG fallback – “no picture”
 const FALLBACK_SVG =
   "data:image/svg+xml;utf8," +
-  encodeURIComponent(
-    `<svg xmlns='http://www.w3.org/2000/svg' width='512' height='320' viewBox='0 0 512 320'>
-      <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
-        <stop offset='0%' stop-color='#1f2937'/><stop offset='100%' stop-color='#111827'/>
-      </linearGradient></defs>
-      <rect width='512' height='320' fill='url(#g)'/>
-      <g fill='#9ca3af' font-family='system-ui,Segoe UI,Roboto,Ubuntu,Arial' text-anchor='middle'>
-        <text x='256' y='170' font-size='20'>no picture</text>
-      </g>
-    </svg>`
-  );
+  encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 512 512'>
+    <rect width='512' height='512' fill='#111827'/>
+    <text x='50%' y='52%' fill='#9ca3af' text-anchor='middle' font-size='18' font-family='system-ui,Segoe UI,Roboto'>no image</text>
+  </svg>`);
 
 export function DealsList({ filters }: { filters: any }) {
   const [items, setItems] = useState<Deal[]>([]);
@@ -44,27 +37,72 @@ export function DealsList({ filters }: { filters: any }) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-  let alive = true;
-  setLoading(true);
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const qsBase = new URLSearchParams(
+          Object.entries(filters).filter(([k,v]) => v !== undefined && k !== "store") as any
+        );
 
-  const qs = new URLSearchParams(
-    Object.entries(filters).filter(([, v]) => v !== undefined && v !== "")
-  ).toString();
+        // Ha üres a kereső és AliExpress bolt van kiválasztva → TOP 200
+        if ((filters.store === "AliExpress") && (!filters.q || !String(filters.q).trim())) {
+          const u = `/.netlify/functions/ali?top=1&limit=200&${qsBase.toString()}`;
+          const r = await fetch(u, { headers: { "Cache-Control":"no-cache" } }).then(x=>x.json());
+          if (!alive) return;
+          setItems(r.items || []);
+          setLoading(false);
+          return;
+        }
 
-  const endpoint = filters.source === "banggood" ? "bg" : "coupons";
-  const url = `/.netlify/functions/${endpoint}?${qs}${qs ? "&" : ""}_=${Date.now()}`;
+        // Egyébként: párhuzamos aggregálás (Sheets + BG + Ali)
+        const urls:string[] = [
+          `/.netlify/functions/coupons?${qsBase.toString()}`,
+          `/.netlify/functions/bg?catalog=1&${qsBase.toString()}`,
+          `/.netlify/functions/ali?${qsBase.toString()}`
+        ];
 
-  fetch(url, { headers: { "Cache-Control": "no-cache" } })
-    .then((r) => r.json())
-    .then((d) => {
-      if (!alive) return;
-      setItems(d.items || []);
-      setLoading(false);
-    })
-    .catch(() => setLoading(false));
+        const results = await Promise.all(urls.map(u =>
+          fetch(u, { headers: { "Cache-Control":"no-cache" } })
+            .then(r => r.ok ? r.json() : Promise.resolve({ items: [] }))
+            .catch(() => ({ items: [] }))
+        ));
 
-  return () => { alive = false; };
-}, [JSON.stringify(filters)]);
+        let merged:Deal[] = results.flatMap(r => r.items || []);
+
+        // Store szűrő a fronton is (biztonság kedvéért)
+        if (filters.store) {
+          merged = merged.filter(d => (d.store || d.src)?.toLowerCase() === filters.store.toLowerCase());
+        }
+
+        // Dedupe (url+code)
+        const seen = new Set<string>();
+        const uniq:Deal[] = [];
+        for (const d of merged) {
+          const key = `${d.url}|${d.code || ""}`;
+          if (!seen.has(key)) { seen.add(key); uniq.push(d); }
+        }
+
+        // Rendezés
+        const s = filters.sort;
+        if (s === "price_asc") uniq.sort((a,b)=>(a.price ?? Infinity)-(b.price ?? Infinity));
+        else if (s === "price_desc") uniq.sort((a,b)=>(b.price ?? -Infinity)-(a.price ?? -Infinity));
+        else if (s === "store_asc" || s === "store_desc") {
+          uniq.sort((a,b)=> s==="store_asc"
+            ? (a.store || a.src || "").localeCompare(b.store || b.src || "")
+            : (b.store || b.src || "").localeCompare(a.store || a.src || "")
+          );
+        }
+
+        if (!alive) return;
+        setItems(uniq);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => { alive = false; };
+  }, [JSON.stringify(filters)]);
 
   async function copyCode(e: React.MouseEvent, deal: Deal) {
     e.preventDefault();
@@ -99,7 +137,7 @@ export function DealsList({ filters }: { filters: any }) {
         const out = d.short || d.url;
         const go =
           `/.netlify/functions/go?u=${encodeURIComponent(out)}` +
-          `&src=${encodeURIComponent(d.src || "")}` +
+          `&src=${encodeURIComponent(d.src || d.store || "")}` +
           `&code=${encodeURIComponent(d.code || "")}`;
 
         const imgSrc = d.image
@@ -127,19 +165,13 @@ export function DealsList({ filters }: { filters: any }) {
                 decoding="async"
                 draggable={false}
                 sizes="(min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
-                onError={(e) => {
-                  const img = e.currentTarget as HTMLImageElement;
-                  img.onerror = null; // ne loopoljon
-                  img.src = FALLBACK_SVG;
-                }}
+                onError={(e) => { const img = e.currentTarget as HTMLImageElement; img.onerror = null; img.src = FALLBACK_SVG; }}
               />
             </div>
 
-            <div className="mb-1 text-xs text-amber-300">{d.store}</div>
+            <div className="mb-1 text-xs uppercase text-neutral-400">{d.store || d.src}</div>
 
-            <div className="mb-2 font-semibold text-white line-clamp-2">
-              {d.title}
-            </div>
+            <div className="mb-2 font-semibold text-white line-clamp-2">{d.title}</div>
 
             <div className="text-sm text-neutral-200">
               {price}
@@ -147,7 +179,7 @@ export function DealsList({ filters }: { filters: any }) {
             </div>
 
             <div className="text-xs text-neutral-500 mt-1">
-              {d.wh || "No warehouse"} {ends ? `• ${ends}` : ""}
+              {(d.wh || "—")} {ends ? `• ${ends}` : ""}
             </div>
 
             {d.code ? (

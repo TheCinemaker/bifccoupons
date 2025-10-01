@@ -2,7 +2,7 @@ import type { Handler } from "@netlify/functions";
 import crypto from "crypto";
 import axios from "axios";
 
-/* ================= Types ================= */
+/* ============== Types ============== */
 type Deal = {
   id: string;
   src: "banggood";
@@ -23,33 +23,32 @@ type Deal = {
   residual?: number;
 };
 
-/* ================ ENV =================== */
-const { BANGGOOD_API_KEY, BANGGOOD_API_SECRET, BANGGOOD_AFFILIATE_PARAM } = process.env;
+/* ============== ENV ============== */
+const {
+  BANGGOOD_API_KEY,
+  BANGGOOD_API_SECRET,
+  BANGGOOD_AFFILIATE_PARAM, // csak a kereső fallbackhez építünk be, de a go.ts úgyis biztosítja
+} = process.env;
 
-/* ============ In-memory cache =========== */
+/* ========== In-memory cache ========== */
 let ACCESS_TOKEN: { token: string; ts: number } | null = null;
 let LAST_JSON = "";
 let LAST_ETAG = "";
 
 const TOKEN_TTL = 50 * 60 * 1000; // 50 perc
-const PAGE_CAP = 5;               // max 5 oldal / kérés
+const COUPON_PAGE_CAP = 5;        // max 5 oldal kupon
+const CATALOG_PAGE_CAP = 2;       // max 2 oldal katalógus
 
-/* ================ Utils ================= */
-function etagOf(json: string) {
-  return crypto.createHash("md5").update(json).digest("hex");
-}
-function md5(s: string) {
-  return crypto.createHash("md5").update(s).digest("hex");
-}
-function sign(params: Record<string, any>) {
-  const sorted = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join("&");
-  return md5(sorted);
-}
+/* ============== Utils ============== */
+const md5 = (s: string) => crypto.createHash("md5").update(s).digest("hex");
+const etagOf = (json: string) => md5(json);
+
 function toISO(d?: string | number | Date) {
   if (!d) return undefined;
   const dt = new Date(d);
   return isNaN(dt.getTime()) ? undefined : dt.toISOString();
 }
+
 function parseMoney(v: any): number | undefined {
   if (v == null) return undefined;
   let s = String(v).trim();
@@ -67,13 +66,16 @@ function parseMoney(v: any): number | undefined {
   const num = parseFloat(s);
   return Number.isFinite(num) ? num : undefined;
 }
+
 function normalizeUrl(u?: string): string | undefined {
   if (!u) return undefined;
   const https = u.replace(/^http:/i, "https:");
   try { return encodeURI(https); } catch { return https; }
 }
+
 function scoreDeal(d: Deal): number {
   let score = 0;
+  if (d.code) score += 20;                          // kupon boost
   if ((d.wh || "").toUpperCase() !== "CN") score += 10;
   if (d.end) {
     const days = Math.max(0, (new Date(d.end).getTime() - Date.now()) / 86400000);
@@ -86,6 +88,11 @@ function scoreDeal(d: Deal): number {
   return score;
 }
 
+function sign(params: Record<string, any>) {
+  const sorted = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join("&");
+  return md5(sorted);
+}
+
 function slugify(q: string) {
   return q.toLowerCase()
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -93,6 +100,7 @@ function slugify(q: string) {
     .replace(/^-+|-+$/g, "")
     .replace(/--+/g, "-");
 }
+
 function buildBgSearchUrl(q: string): string {
   const slug = slugify(q);
   const base = `https://www.banggood.com/search/${slug}.html`;
@@ -100,8 +108,7 @@ function buildBgSearchUrl(q: string): string {
   return p ? `${base}?p=${encodeURIComponent(p)}` : base;
 }
 
-
-/* ========== Banggood auth/token ========= */
+/* ========== Banggood auth ========== */
 async function getAccessToken(): Promise<string> {
   if (!BANGGOOD_API_KEY || !BANGGOOD_API_SECRET) throw new Error("BG API env hiányzik");
   const now = Date.now();
@@ -122,7 +129,7 @@ async function getAccessToken(): Promise<string> {
   return token;
 }
 
-/* ============== Fetch coupons ============== */
+/* ========== Coupon list ========== */
 async function fetchCouponPage(token: string, page: number) {
   const { data } = await axios.get("https://affapi.banggood.com/coupon/list", {
     headers: { "access-token": token },
@@ -168,6 +175,42 @@ function mapCouponToDeal(c: any): Deal {
   };
 }
 
+/* ========== Catalog search: /product/list (keyword) ========== */
+/*  A /product/list támogat keyword keresést és képeket is ad:
+    product_url, product_name, product_price, product_coupon_price, coupon_code,
+    small_image, list_grid_image, view_image ...  (BG affiliate apidoc)  */
+async function fetchCatalogPage(token: string, keyword: string, page: number) {
+  const { data } = await axios.get("https://affapi.banggood.com/product/list", {
+    headers: { "access-token": token },
+    params: { keyword, page },
+    timeout: 10000,
+  });
+  return data?.result || {};
+}
+
+function pickImage(p: any): string | undefined {
+  return normalizeUrl(p.view_image || p.list_grid_image || p.small_image || "");
+}
+
+function mapProductToDeal(p: any): Deal {
+  const price = parseMoney(p.product_coupon_price ?? p.product_price);
+  const orig  = parseMoney(p.product_price);
+  return {
+    id: `banggood:catalog:${p.product_id || md5(p.product_url || p.product_name || "")}`,
+    src: "banggood",
+    store: "Banggood",
+    title: String(p.product_name || "Banggood product"),
+    url: String(p.product_url || "#"),
+    image: pickImage(p),
+    price,
+    orig,
+    cur: "USD",
+    code: p.coupon_code || undefined,   // ha van kupon, itt is megjelenik
+    updated: toISO(Date.now()),
+    tags: [],
+  };
+}
+
 /* ============== Handler ============== */
 export const handler: Handler = async (event) => {
   try {
@@ -182,79 +225,74 @@ export const handler: Handler = async (event) => {
     const sort = (qs.get("sort") || "").toLowerCase(); // price_asc|price_desc|store_asc|store_desc
     const limit = Math.max(1, Math.min(200, parseInt(qs.get("limit") || "100", 10)));
     const cursor = qs.get("cursor");
-    const pageDepth = Math.max(1, Math.min(PAGE_CAP, parseInt(qs.get("pages") || "3", 10)));
-
+    const couponDepth  = Math.max(1, Math.min(COUPON_PAGE_CAP,  parseInt(qs.get("pages") || "3", 10)));
+    const catalogDepth = Math.max(1, Math.min(CATALOG_PAGE_CAP, parseInt(qs.get("cpages") || "2", 10)));
     const wantCatalog = ["1","true","yes"].includes((qs.get("catalog") || "").toLowerCase());
 
-    // token
     const token = await getAccessToken();
 
-    // lapok begyűjtése (realtime kuponok)
+    // --- 1) Kuponok
     let page = 1, pages = 1;
-    const allCoupons: any[] = [];
-    while (page <= pages && page <= pageDepth) {
+    const couponsRaw: any[] = [];
+    while (page <= pages && page <= couponDepth) {
       const res = await fetchCouponPage(token, page);
       const list: any[] = res?.coupon_list || [];
       pages = res?.page_total || page;
-      allCoupons.push(...list);
+      couponsRaw.push(...list);
       page++;
     }
+    let items: Deal[] = couponsRaw.map(mapCouponToDeal);
 
-    // map → Deal
-    let items: Deal[] = allCoupons.map(mapCouponToDeal);
+    // --- 2) Katalógus (ha kérjük, és van q)
+    if (wantCatalog && q) {
+      let cpage = 1, cpages = 1;
+      const productsRaw: any[] = [];
+      while (cpage <= cpages && cpage <= catalogDepth) {
+        const res = await fetchCatalogPage(token, q, cpage);
+        const list: any[] = res?.product_list || [];
+        cpages = res?.page_total || cpage;
+        productsRaw.push(...list);
+        cpage++;
+      }
+      const catalogDeals = productsRaw.map(mapProductToDeal);
 
-    // szűrések
+      // merge + dedupe (url + code alapján)
+      const seen = new Set<string>();
+      const merged: Deal[] = [];
+      for (const d of [...items, ...catalogDeals]) {
+        const key = md5(`${d.url}|${d.code || ""}`);
+        if (!seen.has(key)) { seen.add(key); merged.push(d); }
+      }
+      items = merged;
+    }
+
+    // --- Szűrések
     if (qLower) {
       items = items.filter(d =>
         d.title.toLowerCase().includes(qLower) ||
         (d.code || "").toLowerCase().includes(qLower)
       );
     }
-    if (whFilter) {
-      items = items.filter(d => (d.wh || "").toUpperCase() === whFilter);
-    }
+    if (whFilter) items = items.filter(d => (d.wh || "").toUpperCase() === whFilter);
     if (typeof minPrice === "number") items = items.filter(d => (d.price ?? Infinity) >= minPrice);
     if (typeof maxPrice === "number") items = items.filter(d => (d.price ?? 0) <= maxPrice);
 
-    // rendezés
+    // --- Rendezés
     if (sort === "price_asc") {
       items.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
     } else if (sort === "price_desc") {
       items.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
     } else {
-      // default: okos rangsor (bolt szerint itt nincs értelme, mindig Banggood)
       items = items.map(d => ({ d, s: scoreDeal(d) }))
                    .sort((a, b) => b.s - a.s)
                    .map(x => x.d);
     }
 
-    // meta: warehouses
+    // --- Meta (wh listát csak kuponokból tudunk biztosan)
     const whs = Array.from(new Set(items.map(x => x.wh).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b));
-    const stores = ["Banggood"]; // fix
+    const stores = ["Banggood"];
 
-    // ===== KATALÓGUS FALLBACK =====
-    if (wantCatalog && q && items.length === 0) {
-      const searchUrl = buildBgSearchUrl(q);
-      items.push({
-        id: `banggood-search:${md5(q)}`,
-        src: "banggood",
-        store: "Banggood",
-        title: `Banggood keresés: “${q}” (jelenleg nincs aktív kupon)`,
-        url: searchUrl,
-        image: undefined,
-        price: undefined,
-        orig: undefined,
-        cur: "USD",
-        code: undefined,
-        wh: undefined,
-        start: undefined,
-        end: undefined,
-        updated: toISO(Date.now()),
-        tags: [],
-      });
-    }
-
-    // lapozás
+    // --- Paginálás
     const start = cursor ? parseInt(cursor, 10) || 0 : 0;
     const pageItems = items.slice(start, start + limit);
     const nextCursor = start + limit < items.length ? String(start + limit) : null;
@@ -278,11 +316,7 @@ export const handler: Handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=120, stale-while-revalidate=30",
-        "ETag": etg,
-      },
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=120, stale-while-revalidate=30", "ETag": etg },
       body: json,
     };
   } catch (e: any) {

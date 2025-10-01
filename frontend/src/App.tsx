@@ -1,35 +1,31 @@
+// frontend/src/App.tsx
 import React, { useEffect, useState } from "react";
 import { FilterBar } from "./components/FilterBar";
 import { DealsList } from "./components/DealsList";
 
-type Meta = { warehouses: string[]; stores: string[] };
+type Filters = {
+  q?: string;
+  wh?: string;
+  store?: string; // "", "Banggood", "Geekbuying", "AliExpress"
+  sort?: "price_asc" | "price_desc" | "store_asc" | "store_desc";
+  limit?: number;
+};
 
 export default function App() {
-  const [filters, setFilters] = useState<{
-    q?: string;
-    wh?: string;
-    store?: string;
-    sort?: "price_asc" | "price_desc" | "store_asc" | "store_desc";
-    source?: "sheets" | "banggood";
-    limit?: number;
-  }>({ limit: 100, source: "sheets" });
+  const [filters, setFilters] = useState<Filters>({ limit: 100 });
+  const [meta, setMeta] = useState<{warehouses:string[]; stores:string[]}>({ warehouses: [], stores: ["Banggood","Geekbuying","AliExpress"] });
 
-  const [meta, setMeta] = useState<Meta>({ warehouses: [], stores: [] });
-
+  // Raktárlista a Sheets-ből (J oszlop) – csak egyszer
   useEffect(() => {
-    const endpoint = filters.source === "banggood" ? "bg" : "coupons";
-    const url = `/.netlify/functions/${endpoint}?limit=1&_=${Date.now()}`;
-    fetch(url, { headers: { "Cache-Control": "no-cache" } })
+    fetch(`/.netlify/functions/coupons?limit=200&_=${Date.now()}`)
       .then(r => r.json())
       .then(d => {
-        const m = d?.meta || {};
-        setMeta({
-          warehouses: Array.isArray(m.warehouses) ? m.warehouses : [],
-          stores: Array.isArray(m.stores) ? m.stores : [],
-        });
+        const ws = new Set<string>();
+        (d.items || []).forEach((it: any) => { if (it.wh) ws.add(String(it.wh)); });
+        setMeta(m => ({ ...m, warehouses: Array.from(ws).sort() }));
       })
       .catch(() => {});
-  }, [filters.source]);
+  }, []);
 
   return (
     <div className="min-h-dvh">

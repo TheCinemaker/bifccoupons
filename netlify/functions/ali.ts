@@ -1,8 +1,8 @@
+// netlify/functions/ali.ts
 import type { Handler } from "@netlify/functions";
 import crypto from "crypto";
 import axios from "axios";
 
-/* ================= Types ================= */
 type Deal = {
   id: string;
   src: "aliexpress";
@@ -23,125 +23,78 @@ type Deal = {
   residual?: number;
 };
 
-/* ================ ENV =================== */
 const {
   ALIEXPRESS_APP_KEY,
   ALIEXPRESS_APP_SECRET,
   ALIEXPRESS_TRACKING_ID,
 } = process.env;
 
-/* ============ In-memory cache =========== */
-let LAST_JSON = "";
-let LAST_ETAG = "";
+let LAST_JSON = ""; let LAST_ETAG = "";
 
-/* ================ Limits ================= */
-const PAGE_CAP = 3;        // max ennyi katalógus oldal / kérés
-const PAGE_SIZE = 40;      // termék / oldal (API limitjei mellett rugalmas)
+const PAGE_CAP = 5;         // katalógus keresés max 5 oldal
+const PAGE_SIZE = 40;       // 40/db oldal
+const HOT_TARGET = 200;     // top hypolt cél darabszám
 
-/* ================ Utils ================= */
 const md5 = (s: string) => crypto.createHash("md5").update(s).digest("hex");
 const etagOf = (json: string) => md5(json);
 
-function toISO(d?: string | number | Date) {
-  if (!d) return undefined;
-  const dt = new Date(d);
-  return isNaN(dt.getTime()) ? undefined : dt.toISOString();
-}
-
+function toISO(d?: string | number | Date) { if (!d) return undefined; const dt = new Date(d); return isNaN(dt.getTime()) ? undefined : dt.toISOString(); }
 function parseMoney(v: any): number | undefined {
   if (v == null) return undefined;
-  let s = String(v).trim();
-  if (!s) return undefined;
-  s = s.replace(/\u00A0/g, " ").replace(/\s+/g, "");
-  const hasComma = s.includes(","), hasDot = s.includes(".");
-  if (hasComma && !hasDot) s = s.replace(",", ".");
-  else if (hasComma && hasDot) {
-    if (s.lastIndexOf(",") > s.lastIndexOf(".")) s = s.replace(/\./g, "").replace(",", ".");
-    else s = s.replace(/,/g, "");
-  }
-  s = s.replace(/[^\d.]/g, "");
-  const parts = s.split(".");
-  if (parts.length > 2) { const dec = parts.pop(); s = parts.join("") + "." + dec; }
-  const num = parseFloat(s);
-  return Number.isFinite(num) ? num : undefined;
+  let s = String(v).trim(); if (!s) return undefined;
+  s = s.replace(/\u00A0/g," ").replace(/\s+/g,"");
+  const hasC = s.includes(","), hasD = s.includes(".");
+  if (hasC && !hasD) s = s.replace(",",".");
+  else if (hasC && hasD) { if (s.lastIndexOf(",")>s.lastIndexOf(".")) s = s.replace(/\./g,"").replace(",","."); else s = s.replace(/,/g,""); }
+  s = s.replace(/[^\d.]/g,""); const parts = s.split("."); if (parts.length>2){ const dec=parts.pop(); s=parts.join("")+"."+dec; }
+  const num = parseFloat(s); return Number.isFinite(num)?num:undefined;
 }
-
 function normalizeUrl(u?: string): string | undefined {
   if (!u) return undefined;
   const withProto = u.startsWith("//") ? `https:${u}` : u;
   const https = withProto.replace(/^http:/i, "https:");
   try { return encodeURI(https); } catch { return https; }
 }
-
 function scoreDeal(d: Deal): number {
-  let score = 0;
-  if (d.code) score += 12; // ha lenne kupon, egy kis boost
-  if (d.price && d.orig && d.price < d.orig) {
-    const disc = 100 * (1 - d.price / d.orig);
-    score += Math.min(8, Math.max(0, disc / 5));
-  }
-  return score;
+  let s = 0;
+  if (d.code) s += 12;
+  if (d.price && d.orig && d.price < d.orig) { const disc = 100*(1-d.price/d.orig); s += Math.min(8, Math.max(0, disc/5)); }
+  return s;
 }
 
-/* ========== AliExpress API sign & call ========== */
-/* A jelenlegi Open Platform (sync endpoint) aláírása:
- * - kulcs-érték párok kulcs szerint rendezve, összefűzve: key + value
- * - string elejére az APP_SECRET kerül
- * - HMAC-SHA256 (key = APP_SECRET), nagybetűs hex
- */
-function signAliExpress(params: Record<string, string>): string {
+function signAli(params: Record<string,string>): string {
   if (!ALIEXPRESS_APP_SECRET) throw new Error("ALIEXPRESS_APP_SECRET hiányzik");
-  const sortedKeys = Object.keys(params).sort();
-  const queryString = sortedKeys.map(k => `${k}${params[k]}`).join("");
-  const stringToSign = ALIEXPRESS_APP_SECRET + queryString;
-  return crypto.createHmac("sha256", ALIEXPRESS_APP_SECRET)
-               .update(stringToSign)
-               .digest("hex")
-               .toUpperCase();
+  const keys = Object.keys(params).sort();
+  const qs = keys.map(k=>`${k}${params[k]}`).join("");
+  const base = ALIEXPRESS_APP_SECRET + qs;
+  return crypto.createHmac("sha256", ALIEXPRESS_APP_SECRET).update(base).digest("hex").toUpperCase();
 }
 
-async function callAliExpressApi(method: string, apiParams: Record<string, any>) {
+async function callAli(method: string, apiParams: Record<string, any>) {
   if (!ALIEXPRESS_APP_KEY || !ALIEXPRESS_APP_SECRET || !ALIEXPRESS_TRACKING_ID) {
     throw new Error("AliExpress API környezeti változók hiányoznak");
   }
-
-  const common: Record<string, string> = {
+  const common: Record<string,string> = {
     app_key: ALIEXPRESS_APP_KEY,
     sign_method: "sha256",
     timestamp: String(Date.now()),
     format: "json",
     method,
-    // NOTE: minden paramétert stringgé alakítunk:
-    ...Object.fromEntries(Object.entries(apiParams).map(([k, v]) => [k, String(v)])),
+    ...Object.fromEntries(Object.entries(apiParams).map(([k,v])=>[k,String(v)])),
   };
-
-  const sign = signAliExpress(common);
-  const { data } = await axios.get("https://api-sg.aliexpress.com/sync", {
-    params: { ...common, sign },
-    timeout: 15000,
-  });
-
-  if (data?.error_response) {
-    const msg = `${data.error_response?.msg || "AliExpress API hiba"} (code: ${data.error_response?.code || "?"})`;
-    throw new Error(msg);
-  }
-
-  // A válasz gyökér kulcsa a metódusfüggő response név:
+  const sign = signAli(common);
+  const { data } = await axios.get("https://api-sg.aliexpress.com/sync", { params: { ...common, sign }, timeout: 15000 });
+  if (data?.error_response) throw new Error(`${data.error_response?.msg || "AliExpress API hiba"} (code: ${data.error_response?.code || "?"})`);
   const topKey = Object.keys(data)[0];
   const result = data?.[topKey]?.result;
-  if (!result || result.resp_code !== 200) {
-    throw new Error(`AliExpress API hiba: ${result?.resp_msg || "Ismeretlen hiba a válaszban"}`);
-  }
+  if (!result || result.resp_code !== 200) throw new Error(`AliExpress API hiba: ${result?.resp_msg || "Ismeretlen"}`);
   return result;
 }
 
-/* ========== Catalog keresés (aliexpress.affiliate.product.query) ========== */
-function mapAliItemToDeal(p: any): Deal {
-  // Ár & pénznem – több mezőverziót is kezelünk
+function mapAliItem(p:any): Deal {
   const price = parseMoney(p.target_sale_price ?? p.app_sale_price ?? p.sale_price);
   const orig  = parseMoney(p.target_original_price ?? p.original_price);
   const cur   = (p.target_currency || p.currency || "USD").toString();
-
   return {
     id: `aliexpress:${p.product_id || md5(p.product_url || p.product_title || "")}`,
     src: "aliexpress",
@@ -150,29 +103,58 @@ function mapAliItemToDeal(p: any): Deal {
     url: normalizeUrl(p.promotion_link || p.product_url) || "#",
     image: normalizeUrl(p.product_main_image_url || p.image_url),
     price, orig, cur,
-    // Ali termékeknél kuponkód ritkán jön vissza a product.query-ben:
     code: p.coupon_code || undefined,
     updated: toISO(Date.now()),
     tags: [],
   };
 }
 
-async function fetchAliCatalog(keyword: string, pageNo: number, pageSize: number) {
-  const result = await callAliExpressApi("aliexpress.affiliate.product.query", {
+async function fetchAliCatalog(keyword: string, page: number, pageSize: number) {
+  const res = await callAli("aliexpress.affiliate.product.query", {
     keywords: keyword,
     tracking_id: ALIEXPRESS_TRACKING_ID!,
-    page_no: pageNo,
+    page_no: page,
     page_size: pageSize,
-    // Opcionális: sorting az Ali oldal felé (nem ugyanaz, mint a front rendezés)
-    // sort: "SALE_PRICE_ASC" | "SALE_PRICE_DESC" | "LAST_VOLUME_DESC" | ...
+    sort: "LAST_VOLUME_DESC", // „hypolt”: eladási volumen szerinti
   });
-
-  // A struktúra lehet: result.products vagy result.products.product
-  const products = result.products?.product || result.products || [];
-  return Array.isArray(products) ? products : [];
+  const list = res.products?.product || res.products || [];
+  return Array.isArray(list) ? list : [];
 }
 
-/* ============== Handler ============== */
+// próbálunk „hot products”-t; ha nem megy, fallback volumennel
+async function fetchAliTopHot(targetCount = HOT_TARGET) {
+  const out:any[] = [];
+  // 1) próba: hot product API (ha nincs, hibát dob → fallback)
+  try {
+    let page = 1;
+    while (out.length < targetCount && page <= PAGE_CAP) {
+      const r = await callAli("aliexpress.affiliate.hotproduct.query", {
+        tracking_id: ALIEXPRESS_TRACKING_ID!,
+        page_no: page,
+        page_size: PAGE_SIZE,
+      });
+      const arr = r.products?.product || r.products || [];
+      if (!arr?.length) break;
+      out.push(...arr);
+      page++;
+    }
+  } catch {
+    // 2) fallback: kulcsszó nélküli toplista (különböző általános kulcsszavakkal)
+    const seeds = ["", "electronics", "gadget", "smart", "hot"];
+    for (const kw of seeds) {
+      let page = 1;
+      while (out.length < targetCount && page <= PAGE_CAP) {
+        const arr = await fetchAliCatalog(kw, page, PAGE_SIZE);
+        if (!arr.length) break;
+        out.push(...arr);
+        page++;
+      }
+      if (out.length >= targetCount) break;
+    }
+  }
+  return out.slice(0, targetCount);
+}
+
 export const handler: Handler = async (event) => {
   try {
     const qs = new URLSearchParams(event.queryStringParameters || {});
@@ -180,40 +162,38 @@ export const handler: Handler = async (event) => {
 
     const q = (qs.get("q") || "").trim();
     const qLower = q.toLowerCase();
-
     const minPrice = qs.get("minPrice") ? Number(qs.get("minPrice")) : undefined;
     const maxPrice = qs.get("maxPrice") ? Number(qs.get("maxPrice")) : undefined;
-
-    const sort = (qs.get("sort") || "").toLowerCase(); // price_asc | price_desc | store_asc | store_desc (front oldali logika)
+    const sort = (qs.get("sort") || "").toLowerCase();
     const limit = Math.max(1, Math.min(200, parseInt(qs.get("limit") || "100", 10)));
     const cursor = qs.get("cursor");
-    const pageDepth = Math.max(1, Math.min(PAGE_CAP, parseInt(qs.get("pages") || "2", 10)));
+    const pages = Math.max(1, Math.min(PAGE_CAP, parseInt(qs.get("pages") || "2", 10)));
+    const wantTop = ["1","true","yes"].includes((qs.get("top") || "").toLowerCase());
 
-    // --- 1) Ha van kulcsszó: katalógus keresés több oldalon
-    const itemsRaw: any[] = [];
-    if (q) {
-      let page = 1;
-      while (page <= pageDepth) {
-        const chunk = await fetchAliCatalog(q, page, PAGE_SIZE);
-        if (!chunk.length) break;
-        itemsRaw.push(...chunk);
-        page++;
+    // 1) adatgyűjtés
+    const raw:any[] = [];
+    if (wantTop && !q) {
+      raw.push(...await fetchAliTopHot(200));
+    } else if (q) {
+      let p = 1;
+      while (p <= pages) {
+        const arr = await fetchAliCatalog(q, p, PAGE_SIZE);
+        if (!arr.length) break;
+        raw.push(...arr);
+        p++;
       }
     }
 
-    // --- 2) Map → Deal + dedupe (url|code alapján)
+    // 2) map + dedupe
     const seen = new Set<string>();
     let items: Deal[] = [];
-    for (const p of itemsRaw) {
-      const d = mapAliItemToDeal(p);
+    for (const it of raw) {
+      const d = mapAliItem(it);
       const key = md5(`${d.url}|${d.code || ""}`);
-      if (!seen.has(key)) {
-        seen.add(key);
-        items.push(d);
-      }
+      if (!seen.has(key)) { seen.add(key); items.push(d); }
     }
 
-    // --- 3) Szűrések (front kompatibilis)
+    // 3) front-kompat szűrések
     if (qLower) {
       items = items.filter(d =>
         d.title.toLowerCase().includes(qLower) ||
@@ -223,67 +203,29 @@ export const handler: Handler = async (event) => {
     if (typeof minPrice === "number") items = items.filter(d => (d.price ?? Infinity) >= minPrice);
     if (typeof maxPrice === "number") items = items.filter(d => (d.price ?? 0) <= maxPrice);
 
-    // --- 4) Rendezés (front szabályok szerint)
-    if (sort === "price_asc") {
-      items.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
-    } else if (sort === "price_desc") {
-      items.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
-    } else if (sort === "store_asc" || sort === "store_desc") {
-      items.sort((a, b) =>
-        sort === "store_asc"
-          ? (a.store || "").localeCompare(b.store || "")
-          : (b.store || "").localeCompare(a.store || "")
-      );
+    // 4) rendezés
+    if (sort === "price_asc")      items.sort((a,b)=>(a.price ?? Infinity)-(b.price ?? Infinity));
+    else if (sort === "price_desc")items.sort((a,b)=>(b.price ?? -Infinity)-(a.price ?? -Infinity));
+    else if (sort === "store_asc" || sort === "store_desc") {
+      items.sort((a,b)=> sort==="store_asc" ? (a.store||"").localeCompare(b.store||"") : (b.store||"").localeCompare(a.store||""));
     } else {
-      // alap okos rangsor
-      items = items.map(d => ({ d, s: scoreDeal(d) }))
-                   .sort((a, b) => b.s - a.s)
-                   .map(x => x.d);
+      items = items.map(d=>({d,s:scoreDeal(d)})).sort((a,b)=>b.s-a.s).map(x=>x.d);
     }
 
-    // --- 5) Meta + paginálás
-    const whs: string[] = [];         // Ali-nál nincs raktár infónk katalógusban
-    const stores = ["AliExpress"];
+    // 5) meta + lapozás
+    const whs:string[] = []; const stores = ["AliExpress"];
+    const start = cursor ? parseInt(cursor,10)||0 : 0;
+    const pageItems = items.slice(start, start+limit);
+    const nextCursor = start+limit < items.length ? String(start+limit) : null;
 
-    const start = cursor ? parseInt(cursor, 10) || 0 : 0;
-    const pageItems = items.slice(start, start + limit);
-    const nextCursor = start + limit < items.length ? String(start + limit) : null;
+    const payload = { count: items.length, items: pageItems, nextCursor, updatedAt: new Date().toISOString(), meta: { warehouses: whs, stores } };
+    const json = JSON.stringify(payload); const etg = etagOf(json);
+    if (ifNoneMatch && ifNoneMatch===etg) return { statusCode: 304, headers: { ETag: etg, "Cache-Control": "public, max-age=120, stale-while-revalidate=30" }, body: "" };
 
-    const payload = {
-      count: items.length,
-      items: pageItems,
-      nextCursor,
-      updatedAt: new Date().toISOString(),
-      meta: { warehouses: whs, stores },
-    };
-
-    const json = JSON.stringify(payload);
-    const etg = etagOf(json);
-
-    if (ifNoneMatch && ifNoneMatch === etg) {
-      return { statusCode: 304, headers: { ETag: etg, "Cache-Control": "public, max-age=120, stale-while-revalidate=30" }, body: "" };
-    }
-
-    LAST_JSON = json;
-    LAST_ETAG = etg;
-
-    return {
-      statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=120, stale-while-revalidate=30",
-        "ETag": etg,
-      },
-      body: json,
-    };
-  } catch (e: any) {
-    if (LAST_JSON) {
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", "ETag": LAST_ETAG, "X-Fallback": "snapshot" },
-        body: LAST_JSON,
-      };
-    }
+    LAST_JSON = json; LAST_ETAG = etg;
+    return { statusCode: 200, headers: { "Content-Type":"application/json", "Cache-Control":"public, max-age=120, stale-while-revalidate=30", "ETag": etg }, body: json };
+  } catch (e:any) {
+    if (LAST_JSON) return { statusCode: 200, headers: { "Content-Type":"application/json", "Cache-Control":"public, max-age=60", "ETag": LAST_ETAG, "X-Fallback":"snapshot" }, body: LAST_JSON };
     return { statusCode: 500, body: JSON.stringify({ error: e?.message || "Server error" }) };
   }
 };

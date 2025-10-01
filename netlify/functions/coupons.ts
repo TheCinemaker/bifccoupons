@@ -31,7 +31,7 @@ const SHEETS_TTL_MS = 5 * 60 * 1000;
 /* ========= Constants ========= */
 const SHEETS: { title: string; store: "Banggood" | "Geekbuying" }[] = [
   { title: "Geekbuying Unique", store: "Geekbuying" },
-  { title: "Banggood",         store: "Banggood"   },
+  { title: "Geekbuying",         store: "Geekbuying"   },
   { title: "BG Unique HUN",    store: "Banggood"   },
 ];
 

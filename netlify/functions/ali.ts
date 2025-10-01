@@ -2,9 +2,7 @@
 
 import type { Handler } from "@netlify/functions";
 import crypto from "crypto";
-import axios, { AxiosError } from "axios";
-import http from "http";
-import https from "https";
+import axios from "axios";
 
 // ===== Types =====
 type Deal = {
@@ -30,7 +28,7 @@ const {
   ALIEXPRESS_TRACKING_ID,
 } = process.env;
 
-// ===== Small utils =====
+// ===== Helpers =====
 const md5 = (s: string) => crypto.createHash("md5").update(s, "utf8").digest("hex");
 const etagOf = (json: string) => md5(json);
 
@@ -59,124 +57,76 @@ function parseMoney(v: any): number | undefined {
 function normalizeUrl(u?: string): string | undefined {
   if (!u) return undefined;
   const withProto = u.startsWith("//") ? `https:${u}` : u;
-  const httpsUrl = withProto.replace(/^http:/i, "https:");
-  try { return encodeURI(httpsUrl); } catch { return httpsUrl; }
-}
-
-// Shanghai timestamp (YYYY-MM-DD HH:mm:ss)
-function shanghaiTimestamp(): string {
-  const t = new Date(Date.now() + 8 * 3600 * 1000); // UTC+8
-  return t.toISOString().slice(0, 19).replace("T", " ");
+  const https = withProto.replace(/^http:/i, "https:");
+  try { return encodeURI(https); } catch { return https; }
 }
 
 /**
- * TOP (Affiliate) aláírás:
- * - v=2.0, sign_method=md5, format=json, method, app_key, timestamp (Asia/Shanghai), + API paramok
- * - kulcs szerint ASCII/ABC sorrend, 'sign' kihagyva
- * - secret + (k1v1k2v2...) + secret -> MD5 -> UPPERCASE
+ * Helyes /sync (Business Interface) sign:
+ * - Veszünk MINDEN paramétert (rendszer + business), kivéve "sign"
+ * - ASCII szerint rendezzük a kulcsokat
+ * - Összefűzzük: k1+v1+k2+v2+...
+ * - HMAC-SHA256(message=concat, key=APP_SECRET) -> hex UPPERCASE
+ * - NINCS API path prefix (az csak System Interface, /rest esetén kellene)
  */
-function signTOP(allParamsNoSign: Record<string, string>): string {
+function signSync(allParamsNoSign: Record<string, string>): string {
   if (!ALIEXPRESS_APP_SECRET) throw new Error("ALIEXPRESS_APP_SECRET hiányzik");
   const keys = Object.keys(allParamsNoSign)
-    .filter(k => allParamsNoSign[k] !== undefined && allParamsNoSign[k] !== null)
+    .filter(k => k !== "sign" && allParamsNoSign[k] !== undefined && allParamsNoSign[k] !== null)
     .sort();
-  const concat = keys.map(k => `${k}${allParamsNoSign[k]}`).join("");
-  const bookended = `${ALIEXPRESS_APP_SECRET}${concat}${ALIEXPRESS_APP_SECRET}`;
-  return md5(bookended).toUpperCase();
+  const toSign = keys.map(k => `${k}${allParamsNoSign[k]}`).join("");
+  return crypto.createHmac("sha256", ALIEXPRESS_APP_SECRET).update(toSign, "utf8").digest("hex").toUpperCase();
 }
 
-// ------- Axios kliens Keep-Alive + default header -------
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 });
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
-
-const ax = axios.create({
-  timeout: 10000, // per próbálkozás
-  httpAgent,
-  httpsAgent,
-  headers: {
-    // néhány edge esetben segít
-    "User-Agent": "KinabolVeddMeg/1.0 (+netlify-functions; axios)",
-    "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
-  },
-});
-
-// Két hivatalos TOP gateway (első a preferált)
-const GATEWAYS = [
-  "https://gw.api.taobao.com/router/rest",
-  "https://eco.taobao.com/router/rest",
-];
-
-// Egyszerű exponenciális visszavárás
-const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
-
 /**
- * TOP hívás retry-val és gateway rotációval.
- * Próbák: max 3 (pl. 10s + 12s + 14s), összesen ~36s-ig. (Netlify Pro 26s limitnél állítsd kisebbre.)
+ * /sync hívás (Business Interface)
+ * GET vagy POST is jó; itt GET-et használunk.
+ * FONTOS: timestamp milliszekundumban!
  */
-async function callAliTOP(method: string, apiParams: Record<string, any>) {
-  if (!ALIEXPRESS_APP_KEY || !ALIEXPRESS_APP_SECRET || !ALIEXPRESS_TRACKING_ID) {
+async function callAli(method: string, apiParams: Record<string, any>) {
+  if (!ALIEXPRESS_APP_KEY || !ALIEXPRESS_APP_SECRET) {
     throw new Error("AliExpress API környezeti változók hiányoznak");
   }
 
-  // minden param string legyen
+  const tsMs = Date.now(); // <-- ms, nem sec!
+
+  // mindent stringgé alakítunk
   const apiStr: Record<string, string> = Object.fromEntries(
     Object.entries(apiParams)
       .filter(([, v]) => v !== undefined && v !== null)
       .map(([k, v]) => [k, String(v)])
   );
 
+  // rendszer + business paramok
   const baseNoSign: Record<string, string> = {
-    method,
     app_key: ALIEXPRESS_APP_KEY,
-    sign_method: "md5",
-    timestamp: shanghaiTimestamp(), // "YYYY-MM-DD HH:mm:ss"
+    sign_method: "sha256",
+    timestamp: String(tsMs),
     format: "json",
-    v: "2.0",
+    method, // <- API name paraméterként (részt vesz a sign-ban)
     ...apiStr,
   };
-  const sign = signTOP(baseNoSign);
-  const body = new URLSearchParams({ ...baseNoSign, sign }).toString();
 
-  let lastErr: any = null;
+  const sign = signSync(baseNoSign);
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const gw = GATEWAYS[attempt % GATEWAYS.length];
-    const perTryTimeout = 10000 + attempt * 2000; // 10s, 12s, 14s
+  const { data } = await axios.get("https://api-sg.aliexpress.com/sync", {
+    params: { ...baseNoSign, sign },
+    timeout: 15000,
+  });
 
-    try {
-      const { data } = await ax.post(gw, body, { timeout: perTryTimeout });
-      if (data?.error_response) {
-        const msg = data.error_response?.sub_msg || data.error_response?.msg || "AliExpress API hiba";
-        const code = data.error_response?.code || data.error_response?.sub_code || "?";
-        throw new Error(`${msg} (code: ${code})`);
-      }
-      const topKey = Object.keys(data)[0];
-      const result = data?.[topKey]?.result;
-      if (!result || result?.resp_code !== 200) {
-        throw new Error(`AliExpress API hiba: ${result?.resp_msg || "Ismeretlen"}`);
-      }
-      return result; // SIKER
-    } catch (e: any) {
-      lastErr = e;
-      const isTimeout =
-        (e as AxiosError).code === "ECONNABORTED" ||
-        /timeout/i.test((e as Error).message || "");
-      const isNetwork =
-        (e as AxiosError).code === "ENOTFOUND" ||
-        (e as AxiosError).code === "EAI_AGAIN" ||
-        (e as AxiosError).code === "ECONNRESET";
-
-      // csak hálózati/timeout hibáknál próbáljunk újra
-      if (attempt < 2 && (isTimeout || isNetwork)) {
-        await sleep(300 + attempt * 400); // 300ms, 700ms
-        continue;
-      }
-      // ha API hibakód, ne ismételjünk feleslegesen
-      break;
-    }
+  if (data?.error_response) {
+    const msg = data.error_response?.msg || "AliExpress API hiba";
+    const code = data.error_response?.code || "?";
+    throw new Error(`${msg} (code: ${code})`);
   }
 
-  throw lastErr || new Error("Ismeretlen hiba a TOP hívás során");
+  // Válasz kulcs pl.: aliexpress_affiliate_product_query_response
+  const topKey = Object.keys(data)[0];
+  const result = data?.[topKey]?.result;
+  if (!result || result.resp_code !== 200) {
+    throw new Error(`AliExpress API hiba: ${result?.resp_msg || "Ismeretlen"}`);
+  }
+  return result;
 }
 
 function mapAliItem(p: any): Deal {
@@ -199,7 +149,7 @@ function mapAliItem(p: any): Deal {
   };
 }
 
-// ===== ETag cache (nem kötelező) =====
+// ===== ETag cache =====
 let LAST_JSON = "";
 let LAST_ETAG = "";
 
@@ -210,7 +160,7 @@ export const handler: Handler = async (event) => {
     const ifNoneMatch = event.headers["if-none-match"];
 
     const q = (qs.get("q") || "").trim();
-    const limit = Math.max(1, Math.min(50, parseInt(qs.get("limit") || "40", 10))); // kicsit lejjebb, hogy gyorsabb legyen
+    const limit = Math.max(1, Math.min(50, parseInt(qs.get("limit") || "50", 10)));
     const wantTop = ["1", "true", "yes"].includes((qs.get("top") || "").toLowerCase());
     const sort = (qs.get("sort") || "").toLowerCase();
 
@@ -218,9 +168,9 @@ export const handler: Handler = async (event) => {
     let totalItems = 0;
 
     if (wantTop && !q) {
-      console.log("[ali.ts] Top termékek kérése (TOP gateway, retry)");
-      const res = await callAliTOP("aliexpress.affiliate.hotproduct.query", {
-        tracking_id: String(ALIEXPRESS_TRACKING_ID),
+      console.log("[ali.ts] Top termékek kérése (/sync, HMAC-SHA256, ms timestamp)");
+      const res = await callAli("aliexpress.affiliate.hotproduct.query", {
+        tracking_id: String(ALIEXPRESS_TRACKING_ID || ""),
         page_size: String(limit),
         target_currency: "USD",
         target_language: "EN",
@@ -229,14 +179,14 @@ export const handler: Handler = async (event) => {
       totalItems = res.total_record_count || (rawItems?.length || 0);
 
     } else if (q) {
-      console.log(`[ali.ts] Keresés (TOP gateway, retry): "${q}"`);
+      console.log(`[ali.ts] Keresés (/sync): "${q}"`);
       let sortParam = "RELEVANCE";
       if (sort === "price_asc")  sortParam = "SALE_PRICE_ASC";
       if (sort === "price_desc") sortParam = "SALE_PRICE_DESC";
 
-      const res = await callAliTOP("aliexpress.affiliate.product.query", {
+      const res = await callAli("aliexpress.affiliate.product.query", {
         keywords: q,
-        tracking_id: String(ALIEXPRESS_TRACKING_ID),
+        tracking_id: String(ALIEXPRESS_TRACKING_ID || ""),
         page_size: String(limit),
         sort: sortParam,
         target_currency: "USD",

@@ -21,7 +21,7 @@ type Deal = {
   tags?: string[];
 };
 
-// Környezeti változók
+// ENV
 const {
   ALIEXPRESS_APP_KEY,
   ALIEXPRESS_APP_SECRET,
@@ -32,7 +32,7 @@ const {
 let LAST_JSON = "";
 let LAST_ETAG = "";
 
-// Segédfüggvények
+// Segédek
 const md5 = (s: string) => crypto.createHash("md5").update(s).digest("hex");
 const etagOf = (json: string) => md5(json);
 
@@ -41,7 +41,6 @@ function toISO(d?: string | number | Date) {
   const dt = new Date(d);
   return isNaN(dt.getTime()) ? undefined : dt.toISOString();
 }
-
 function parseMoney(v: any): number | undefined {
   if (v == null) return undefined;
   let s = String(v).trim();
@@ -59,7 +58,6 @@ function parseMoney(v: any): number | undefined {
   const num = parseFloat(s);
   return Number.isFinite(num) ? num : undefined;
 }
-
 function normalizeUrl(u?: string): string | undefined {
   if (!u) return undefined;
   const withProto = u.startsWith("//") ? `https:${u}` : u;
@@ -68,31 +66,21 @@ function normalizeUrl(u?: string): string | undefined {
 }
 
 /**
- * === HELYES ALIEXPRESS SIGN ===
- * 1) Paraméterek (app_key, timestamp, sign_method, format, method, ... + saját API params)
- * 2) ABC sorrend kulcs szerint
- * 3) Összefűzés:  apiName + (k1+v1) + (k2+v2) + ...
- * 4) sign = HMAC-SHA256( message=concatenatedString, key=APP_SECRET ) .hex().toUpperCase()
+ * Helyes AliExpress Portals sign képzés:
+ * - Vegyünk MINDEN paramétert (app_key, method, sign_method, format, timestamp, és az API own paramokat),
+ * - rendezzük ABC szerint kulcs alapján,
+ * - fűzzük össze "key + value" formában,
+ * - HMAC-SHA256(message=concatenated, key=APP_SECRET) -> hex uppercase
+ *
+ * FONTOS: nincs method-prefix, nincs secret-concat az üzenetben!
  */
-function signAli(method: string, apiParams: Record<string, string>): string {
+function makeAliSignature(allParams: Record<string, string>): string {
   if (!ALIEXPRESS_APP_SECRET) throw new Error("ALIEXPRESS_APP_SECRET hiányzik");
-
-  const baseParams: Record<string, string> = {
-    app_key: String(ALIEXPRESS_APP_KEY),
-    sign_method: "sha256",
-    timestamp: String(Date.now()), // ms-ben OK a Portalsnál
-    format: "json",
-    method, // fontos: benne van a paramlistában is
-    ...apiParams,
-  };
-
-  const sortedKeys = Object.keys(baseParams).sort();
-  const concatenatedKV = sortedKeys.map(k => `${k}${baseParams[k]}`).join("");
-  const stringToSign = method + concatenatedKV; // dokumentációnak megfelelően: method + (k+v)*
-
-  const hmac = crypto.createHmac("sha256", ALIEXPRESS_APP_SECRET);
-  hmac.update(stringToSign);
-  return hmac.digest("hex").toUpperCase();
+  const keys = Object.keys(allParams)
+    .filter(k => k !== "sign" && allParams[k] !== undefined && allParams[k] !== null)
+    .sort();
+  const toSign = keys.map(k => `${k}${allParams[k]}`).join("");
+  return crypto.createHmac("sha256", ALIEXPRESS_APP_SECRET).update(toSign).digest("hex").toUpperCase();
 }
 
 async function callAli(method: string, apiParams: Record<string, any>) {
@@ -100,31 +88,38 @@ async function callAli(method: string, apiParams: Record<string, any>) {
     throw new Error("AliExpress API környezeti változók hiányoznak");
   }
 
-  // minden param string legyen (aláírás és axios GET miatt)
-  const apiParamsStr: Record<string, string> = Object.fromEntries(
-    Object.entries(apiParams).map(([k, v]) => [k, String(v)])
+  // A timestamp MÁSODPERC-ben!
+  const tsSec = Math.floor(Date.now() / 1000);
+
+  // mindent stringgé konvertálunk
+  const apiStr: Record<string, string> = Object.fromEntries(
+    Object.entries(apiParams)
+      .filter(([, v]) => v !== undefined && v !== null)
+      .map(([k, v]) => [k, String(v)])
   );
 
-  const common: Record<string, string> = {
+  const baseParams: Record<string, string> = {
     app_key: ALIEXPRESS_APP_KEY,
-    sign_method: "sha256",
-    timestamp: String(Date.now()),
     format: "json",
     method,
-    ...apiParamsStr,
+    sign_method: "sha256",
+    timestamp: String(tsSec),
+    ...apiStr,
   };
 
-  const sign = signAli(method, apiParamsStr);
+  const sign = makeAliSignature(baseParams);
+
   const { data } = await axios.get("https://api-sg.aliexpress.com/sync", {
-    params: { ...common, sign },
+    params: { ...baseParams, sign },
     timeout: 15000,
   });
 
   if (data?.error_response) {
-    throw new Error(`${data.error_response?.msg || "AliExpress API hiba"} (code: ${data.error_response?.code || "?"})`);
+    const msg = data.error_response?.msg || "AliExpress API hiba";
+    const code = data.error_response?.code || "?";
+    throw new Error(`${msg} (code: ${code})`);
   }
 
-  // A válasz tetején kulcs: pl. aliexpress_affiliate_product_query_response
   const topKey = Object.keys(data)[0];
   const result = data?.[topKey]?.result;
   if (!result || result.resp_code !== 200) {
@@ -167,7 +162,6 @@ export const handler: Handler = async (event) => {
     let rawItems: any[] = [];
     let totalItems = 0;
 
-    // 1) Top termékek (nincs kereső)
     if (wantTop && !q) {
       console.log("[ali.ts] Top termékek kérése");
       const res = await callAli("aliexpress.affiliate.hotproduct.query", {
@@ -177,7 +171,6 @@ export const handler: Handler = async (event) => {
       rawItems = res.products?.product || [];
       totalItems = res.total_record_count || (rawItems?.length || 0);
 
-    // 2) Keresés
     } else if (q) {
       console.log(`[ali.ts] Keresés: "${q}"`);
       let sortParam = "RELEVANCE";
@@ -190,7 +183,6 @@ export const handler: Handler = async (event) => {
         page_size: String(limit),
         sort: sortParam,
       });
-
       rawItems = res.products?.product || [];
       totalItems = res.total_record_count || (rawItems?.length || 0);
     }

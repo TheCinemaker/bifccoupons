@@ -35,7 +35,7 @@ export default function App() {
     <div className="min-h-dvh">
       <header className="px-4 py-3 border-b border-neutral-800">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="font-bold">kinabolveddmeg</div>
+          <div className="font-bold">kinabolveddmeg kuponkereső</div>
           <small className="text-neutral-400">PWA ✓</small>
         </div>
       </header>

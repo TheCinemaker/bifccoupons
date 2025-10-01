@@ -1,46 +1,66 @@
 import type { Handler } from "@netlify/functions";
+import { URL } from "url";
 
-function appendUtm(u: string) {
-  try {
-    const url = new URL(u);
-    const p = url.searchParams;
-    if (!p.get("utm_source")) p.set("utm_source", "kinabolveddmeg");
-    if (!p.get("utm_medium")) p.set("utm_medium", "pwa");
-    if (!p.get("utm_campaign")) p.set("utm_campaign", "coupons");
-    return url.toString();
-  } catch {
-    return u;
-  }
+const {
+  BANGGOOD_AFFILIATE_PARAM,         // pl. "ED23236044949201608N"
+  UTM_SOURCE = "kvbm",
+  UTM_MEDIUM = "pwa",
+  UTM_CAMPAIGN = "coupons",
+} = process.env;
+
+function isBanggood(u: URL) {
+  return /(^|\.)banggood\.com$/i.test(u.hostname);
+}
+
+function ensureHttps(u: URL) {
+  if (u.protocol === "http:") u.protocol = "https:";
+}
+
+function addQueryParam(u: URL, key: string, value?: string | null) {
+  if (!value) return;
+  if (!u.searchParams.has(key)) u.searchParams.set(key, value);
 }
 
 export const handler: Handler = async (event) => {
-  const u = event.queryStringParameters?.u || "";
-  if (!u) return { statusCode: 400, body: "Missing u" };
+  try {
+    const uRaw = event.queryStringParameters?.u || "";
+    if (!uRaw) return { statusCode: 400, body: "Missing u" };
 
-  // https + encode + UTM
-  const httpsUrl = u.replace(/^http:/, "https:");
-  const withUtm = appendUtm(httpsUrl);
-  const safe = encodeURI(withUtm);
+    const src = event.queryStringParameters?.src || "";   // opcionális méréshez
+    const code = event.queryStringParameters?.code || ""; // opcionális méréshez
 
-  const html = `<!doctype html>
-<html><head>
-<meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=${safe}">
-<meta name="referrer" content="no-referrer">
-<title>Redirect…</title>
-<script>location.replace(${JSON.stringify(safe)});</script>
-</head>
-<body>
-Redirecting… <a href="${safe}" rel="noreferrer" target="_top">Continue</a>
-</body></html>`;
+    // céllink felépítése
+    const target = new URL(uRaw, "https://example.com");
+    if (!/^https?:/i.test(target.protocol)) {
+      // ha relatív vagy rossz protocol jött, dobjuk vissza
+      return { statusCode: 400, body: "Invalid URL" };
+    }
+    ensureHttps(target);
 
-  return {
-    statusCode: 200,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
-      "Referrer-Policy": "no-referrer"
-    },
-    body: html
-  };
+    // —— Affiliate param: BANGGOOD ——
+    if (isBanggood(target) && BANGGOOD_AFFILIATE_PARAM) {
+      // csak akkor tesszük rá, ha MÉG NINCS "p=" a linken
+      if (!target.searchParams.has("p")) {
+        target.searchParams.set("p", BANGGOOD_AFFILIATE_PARAM);
+      }
+    }
+
+    // —— UTM-ek (nem írjuk felül, ha már vannak) ——
+    addQueryParam(target, "utm_source", UTM_SOURCE);
+    addQueryParam(target, "utm_medium", UTM_MEDIUM);
+    addQueryParam(target, "utm_campaign", UTM_CAMPAIGN);
+    if (src) addQueryParam(target, "utm_content", src.toString());
+    if (code) addQueryParam(target, "coupon", code.toString());
+
+    return {
+      statusCode: 302,
+      headers: {
+        Location: target.toString(),
+        "Cache-Control": "no-store",
+      },
+      body: "",
+    };
+  } catch (e: any) {
+    return { statusCode: 500, body: e?.message || "go error" };
+  }
 };

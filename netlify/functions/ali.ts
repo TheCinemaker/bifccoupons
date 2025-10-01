@@ -22,11 +22,9 @@ type Deal = {
 };
 
 // Környezeti változók
-const {
-  ALIEXPRESS_APP_KEY,
-  ALIEXPRESS_APP_SECRET,
-  ALIEXPRESS_TRACKING_ID,
-} = process.env;
+const ALIEXPRESS_APP_KEY = process.env.ALIEXPRESS_APP_KEY;
+const ALIEXPRESS_APP_SECRET = process.env.ALIEXPRESS_APP_SECRET;
+const ALIEXPRESS_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID;
 
 // Cache
 let LAST_JSON = ""; 

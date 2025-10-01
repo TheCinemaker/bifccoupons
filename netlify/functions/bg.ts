@@ -86,11 +86,20 @@ function scoreDeal(d: Deal): number {
   return score;
 }
 
+function slugify(q: string) {
+  return q.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/--+/g, "-");
+}
 function buildBgSearchUrl(q: string): string {
-  const base = `https://www.banggood.com/search/${encodeURIComponent(q)}.html`;
+  const slug = slugify(q);
+  const base = `https://www.banggood.com/search/${slug}.html`;
   const p = (BANGGOOD_AFFILIATE_PARAM || "").trim();
   return p ? `${base}?p=${encodeURIComponent(p)}` : base;
 }
+
 
 /* ========== Banggood auth/token ========= */
 async function getAccessToken(): Promise<string> {

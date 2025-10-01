@@ -6,7 +6,7 @@ import { google } from "googleapis";
 type Deal = {
   id: string;
   src: "sheets";
-  store: "Banggood" | "Geekbuying";
+  store: "Banggood" | "Geekbuying" | "GShopper";
   title: string;
   url: string;
   image?: string;
@@ -29,10 +29,11 @@ let SHEETS_CACHE: { items: Deal[]; warehouses: string[]; stores: string[]; ts: n
 const SHEETS_TTL_MS = 5 * 60 * 1000;
 
 /* ========= Constants ========= */
-const SHEETS: { title: string; store: "Banggood" | "Geekbuying" }[] = [
+const SHEETS: { title: string; store: "Banggood" | "Geekbuying" | "Geekbuying" }[] = [
   { title: "Geekbuying Unique", store: "Geekbuying" },
   { title: "Geekbuying",         store: "Geekbuying"   },
   { title: "BG Unique HUN",    store: "Banggood"   },
+  { title: "Gshopper",    store: "Gshopper"   },
 ];
 
 // oszlop indexek (0-alapú)

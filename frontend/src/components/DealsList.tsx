@@ -1,4 +1,3 @@
-// frontend/src/components/DealsList.tsx
 import React, { useEffect, useState } from "react";
 
 type Deal = {
@@ -33,77 +32,122 @@ const FALLBACK_SVG =
 
 export function DealsList({ filters }: { filters: any }) {
   const [items, setItems] = useState<Deal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Alapból töltsön, mert az alapnézetet is be kell tölteni
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    (async () => {
+    const fetchDeals = async () => {
       setLoading(true);
       try {
-        const qsBase = new URLSearchParams(
-          Object.entries(filters).filter(([k,v]) => v !== undefined && k !== "store") as any
-        );
+        const q = (filters.q || "").trim();
+        let finalItems: Deal[] = [];
 
-        // Ha üres a kereső és AliExpress bolt van kiválasztva → TOP 200
-        if ((filters.store === "AliExpress") && (!filters.q || !String(filters.q).trim())) {
-          const u = `/.netlify/functions/ali?top=1&limit=200&${qsBase.toString()}`;
-          const r = await fetch(u, { headers: { "Cache-Control":"no-cache" } }).then(x=>x.json());
-          if (!alive) return;
-          setItems(r.items || []);
-          setLoading(false);
-          return;
+        // =======================================================
+        //  PRIORITÁSI LOGIKA
+        // =======================================================
+
+        // 1. SZABÁLY: A KERESŐ MINDENT VISZ
+        if (q) {
+          const qs = new URLSearchParams(filters as any).toString();
+          
+          const urls: string[] = [
+            `/.netlify/functions/coupons?${qs}`,
+            `/.netlify/functions/bg?catalog=1&${qs}`,
+            `/.netlify/functions/ali?${qs}`
+          ];
+
+          const results = await Promise.all(
+            urls.map(u =>
+              fetch(u).then(r => (r.ok ? r.json() : { items: [] })).catch(() => ({ items: [] }))
+            )
+          );
+          
+          let merged: Deal[] = results.flatMap(r => r.items || []);
+
+          if (filters.store) {
+            merged = merged.filter(d => (d.store || d.src)?.toLowerCase() === filters.store.toLowerCase());
+          }
+          finalItems = merged;
+
+        // 2. SZABÁLY: NINCS KERESÉS, DE VAN BOLT VÁLASZTVA
+        } else if (filters.store) {
+            switch (filters.store) {
+                case "AliExpress":
+                    const aliUrl = `/.netlify/functions/ali?top=1&limit=200`;
+                    const aliRes = await fetch(aliUrl).then(r => r.json());
+                    finalItems = aliRes.items || [];
+                    break;
+                case "Banggood":
+                case "Geekbuying":
+                case "Gshopper":
+                    const sheetUrl = `/.netlify/functions/coupons?store=${filters.store}&limit=200`;
+                    const sheetRes = await fetch(sheetUrl).then(r => r.json());
+                    finalItems = sheetRes.items || [];
+                    break;
+            }
+        // 3. SZABÁLY (ÚJ): ALAPÉRTELMEZETT NÉZET - NINCS KERESŐ ÉS NINCS BOLT
+        } else {
+            // Cél: Minden forrásból a legjobb 3-3 ajánlatot mutatjuk ízelítőnek.
+            const defaultUrls = [
+                // Sheets-alapú boltok (a 'coupons' végpont a belső rendezése miatt a legjobbakat adja vissza)
+                '/.netlify/functions/coupons?store=Banggood&limit=3',
+                '/.netlify/functions/coupons?store=Geekbuying&limit=3',
+                '/.netlify/functions/coupons?store=Gshopper&limit=3',
+                // Live API-k (feltételezve, hogy támogatják a top=1 és limit paramétert)
+                '/.netlify/functions/ali?top=1&limit=3',
+                '/.netlify/functions/bg?top=1&limit=3'
+            ];
+            
+            const results = await Promise.all(
+                defaultUrls.map(u =>
+                fetch(u).then(r => (r.ok ? r.json() : { items: [] })).catch(() => ({ items: [] }))
+                )
+            );
+            
+            finalItems = results.flatMap(r => r.items || []);
         }
 
-        // Egyébként: párhuzamos aggregálás (Sheets + BG + Ali)
-        const urls:string[] = [
-          `/.netlify/functions/coupons?${qsBase.toString()}`,
-          `/.netlify/functions/bg?catalog=1&${qsBase.toString()}`,
-          `/.netlify/functions/ali?${qsBase.toString()}`
-        ];
-
-        const results = await Promise.all(urls.map(u =>
-          fetch(u, { headers: { "Cache-Control":"no-cache" } })
-            .then(r => r.ok ? r.json() : Promise.resolve({ items: [] }))
-            .catch(() => ({ items: [] }))
-        ));
-
-        let merged:Deal[] = results.flatMap(r => r.items || []);
-
-        // Store szűrő a fronton is (biztonság kedvéért)
-        if (filters.store) {
-          merged = merged.filter(d => (d.store || d.src)?.toLowerCase() === filters.store.toLowerCase());
-        }
-
-        // Dedupe (url+code)
+        // =======================================================
+        //  UTÓFELDOLGOZÁS (Dedupe, Rendezés)
+        // =======================================================
+        
         const seen = new Set<string>();
-        const uniq:Deal[] = [];
-        for (const d of merged) {
+        const uniq: Deal[] = [];
+        for (const d of finalItems) {
           const key = `${d.url}|${d.code || ""}`;
-          if (!seen.has(key)) { seen.add(key); uniq.push(d); }
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniq.push(d);
+          }
         }
 
-        // Rendezés
         const s = filters.sort;
-        if (s === "price_asc") uniq.sort((a,b)=>(a.price ?? Infinity)-(b.price ?? Infinity));
-        else if (s === "price_desc") uniq.sort((a,b)=>(b.price ?? -Infinity)-(a.price ?? -Infinity));
+        if (s === "price_asc") uniq.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+        else if (s === "price_desc") uniq.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
         else if (s === "store_asc" || s === "store_desc") {
-          uniq.sort((a,b)=> s==="store_asc"
-            ? (a.store || a.src || "").localeCompare(b.store || b.src || "")
+          uniq.sort((a, b) => s === "store_asc"
+            ? (a.store || a.src || "").localeCompare(b.store || a.src || "")
+            // @ts-ignore
             : (b.store || b.src || "").localeCompare(a.store || a.src || "")
           );
         }
 
-        if (!alive) return;
-        setItems(uniq);
+        if (alive) {
+          setItems(uniq);
+        }
+      } catch (error) {
+        console.error("Hiba a deal-ek betöltése közben:", error);
+        if (alive) setItems([]);
       } finally {
         if (alive) setLoading(false);
       }
-    })();
+    };
 
+    fetchDeals();
     return () => { alive = false; };
   }, [JSON.stringify(filters)]);
-
+  
   async function copyCode(e: React.MouseEvent, deal: Deal) {
     e.preventDefault();
     if (!deal.code) return;
@@ -117,7 +161,7 @@ export function DealsList({ filters }: { filters: any }) {
   if (loading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-3">
-        {Array.from({ length: 6 }).map((_, i) => (
+        {Array.from({ length: 9 }).map((_, i) => (
           <div key={i} className="bg-neutral-900 rounded-lg p-3">
             <div className="w-full h-40 rounded-md mb-2 bg-neutral-800 animate-pulse" />
             <div className="h-4 w-3/4 bg-neutral-800 rounded mb-2 animate-pulse" />
@@ -129,7 +173,14 @@ export function DealsList({ filters }: { filters: any }) {
     );
   }
 
-  if (!items.length) return <div className="p-4 text-neutral-400">Nincs találat.</div>;
+  if (!items.length) {
+    return (
+      <div className="p-6 text-center text-neutral-400">
+        <h3 className="text-lg font-semibold text-white mb-2">Nincs találat</h3>
+        <p>Próbálj más kulcsszót, vagy válassz egy boltot a fenti listából a legnépszerűbb termékekért.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-3">
@@ -137,7 +188,7 @@ export function DealsList({ filters }: { filters: any }) {
         const out = d.short || d.url;
         const go =
           `/.netlify/functions/go?u=${encodeURIComponent(out)}` +
-          `&src=${encodeURIComponent(d.src || d.store || "")}` +
+          `&src=${encodeURIComponent(d.store || d.src || "")}` +
           `&code=${encodeURIComponent(d.code || "")}`;
 
         const imgSrc = d.image

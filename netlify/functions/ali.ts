@@ -2,7 +2,9 @@
 
 import type { Handler } from "@netlify/functions";
 import crypto from "crypto";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
+import http from "http";
+import https from "https";
 
 // ===== Types =====
 type Deal = {
@@ -57,23 +59,21 @@ function parseMoney(v: any): number | undefined {
 function normalizeUrl(u?: string): string | undefined {
   if (!u) return undefined;
   const withProto = u.startsWith("//") ? `https:${u}` : u;
-  const https = withProto.replace(/^http:/i, "https:");
-  try { return encodeURI(https); } catch { return https; }
+  const httpsUrl = withProto.replace(/^http:/i, "https:");
+  try { return encodeURI(httpsUrl); } catch { return httpsUrl; }
 }
 
-// Shanghai timestamp (YYYY-MM-DD HH:mm:ss) – Shanghai UTC+8, nincs DST
+// Shanghai timestamp (YYYY-MM-DD HH:mm:ss)
 function shanghaiTimestamp(): string {
-  const t = new Date(Date.now() + 8 * 3600 * 1000);
+  const t = new Date(Date.now() + 8 * 3600 * 1000); // UTC+8
   return t.toISOString().slice(0, 19).replace("T", " ");
 }
 
 /**
  * TOP (Affiliate) aláírás:
- * 1) v=2.0, sign_method=md5, format=json, method, app_key, timestamp (Asia/Shanghai), + API paramok
- * 2) kulcs szerint ASCII/ABC sorrend, 'sign' nélkül
- * 3) összefűzés: secret + (k1v1k2v2...) + secret
- * 4) MD5 -> UPPERCASE
- * Források/Logika: TOP/AE affiliate példa és doksi. 
+ * - v=2.0, sign_method=md5, format=json, method, app_key, timestamp (Asia/Shanghai), + API paramok
+ * - kulcs szerint ASCII/ABC sorrend, 'sign' kihagyva
+ * - secret + (k1v1k2v2...) + secret -> MD5 -> UPPERCASE
  */
 function signTOP(allParamsNoSign: Record<string, string>): string {
   if (!ALIEXPRESS_APP_SECRET) throw new Error("ALIEXPRESS_APP_SECRET hiányzik");
@@ -85,9 +85,33 @@ function signTOP(allParamsNoSign: Record<string, string>): string {
   return md5(bookended).toUpperCase();
 }
 
+// ------- Axios kliens Keep-Alive + default header -------
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+
+const ax = axios.create({
+  timeout: 10000, // per próbálkozás
+  httpAgent,
+  httpsAgent,
+  headers: {
+    // néhány edge esetben segít
+    "User-Agent": "KinabolVeddMeg/1.0 (+netlify-functions; axios)",
+    "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
+  },
+});
+
+// Két hivatalos TOP gateway (első a preferált)
+const GATEWAYS = [
+  "https://gw.api.taobao.com/router/rest",
+  "https://eco.taobao.com/router/rest",
+];
+
+// Egyszerű exponenciális visszavárás
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 /**
- * TOP hívás a Taobao gatewayre (POST, x-www-form-urlencoded)
- * Gateway: http(s)://gw.api.taobao.com/router/rest (HTTPS javasolt)
+ * TOP hívás retry-val és gateway rotációval.
+ * Próbák: max 3 (pl. 10s + 12s + 14s), összesen ~36s-ig. (Netlify Pro 26s limitnél állítsd kisebbre.)
  */
 async function callAliTOP(method: string, apiParams: Record<string, any>) {
   if (!ALIEXPRESS_APP_KEY || !ALIEXPRESS_APP_SECRET || !ALIEXPRESS_TRACKING_ID) {
@@ -101,43 +125,58 @@ async function callAliTOP(method: string, apiParams: Record<string, any>) {
       .map(([k, v]) => [k, String(v)])
   );
 
-  const base: Record<string, string> = {
+  const baseNoSign: Record<string, string> = {
     method,
     app_key: ALIEXPRESS_APP_KEY,
     sign_method: "md5",
-    timestamp: shanghaiTimestamp(), // pl. "2025-10-01 20:15:03"
+    timestamp: shanghaiTimestamp(), // "YYYY-MM-DD HH:mm:ss"
     format: "json",
     v: "2.0",
     ...apiStr,
   };
+  const sign = signTOP(baseNoSign);
+  const body = new URLSearchParams({ ...baseNoSign, sign }).toString();
 
-  const sign = signTOP(base);
+  let lastErr: any = null;
 
-  const body = new URLSearchParams({ ...base, sign });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const gw = GATEWAYS[attempt % GATEWAYS.length];
+    const perTryTimeout = 10000 + attempt * 2000; // 10s, 12s, 14s
 
-  // TOP gateway – HTTPS használata
-  const { data } = await axios.post(
-    "https://gw.api.taobao.com/router/rest",
-    body.toString(),
-    {
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=utf-8" },
-      timeout: 15000,
+    try {
+      const { data } = await ax.post(gw, body, { timeout: perTryTimeout });
+      if (data?.error_response) {
+        const msg = data.error_response?.sub_msg || data.error_response?.msg || "AliExpress API hiba";
+        const code = data.error_response?.code || data.error_response?.sub_code || "?";
+        throw new Error(`${msg} (code: ${code})`);
+      }
+      const topKey = Object.keys(data)[0];
+      const result = data?.[topKey]?.result;
+      if (!result || result?.resp_code !== 200) {
+        throw new Error(`AliExpress API hiba: ${result?.resp_msg || "Ismeretlen"}`);
+      }
+      return result; // SIKER
+    } catch (e: any) {
+      lastErr = e;
+      const isTimeout =
+        (e as AxiosError).code === "ECONNABORTED" ||
+        /timeout/i.test((e as Error).message || "");
+      const isNetwork =
+        (e as AxiosError).code === "ENOTFOUND" ||
+        (e as AxiosError).code === "EAI_AGAIN" ||
+        (e as AxiosError).code === "ECONNRESET";
+
+      // csak hálózati/timeout hibáknál próbáljunk újra
+      if (attempt < 2 && (isTimeout || isNetwork)) {
+        await sleep(300 + attempt * 400); // 300ms, 700ms
+        continue;
+      }
+      // ha API hibakód, ne ismételjünk feleslegesen
+      break;
     }
-  );
-
-  if (data?.error_response) {
-    const msg = data.error_response?.sub_msg || data.error_response?.msg || "AliExpress API hiba";
-    const code = data.error_response?.code || data.error_response?.sub_code || "?";
-    throw new Error(`${msg} (code: ${code})`);
   }
 
-  // Válasz kulcs pl.: aliexpress_affiliate_product_query_response
-  const topKey = Object.keys(data)[0];
-  const result = data?.[topKey]?.result;
-  if (!result || result?.resp_code !== 200) {
-    throw new Error(`AliExpress API hiba: ${result?.resp_msg || "Ismeretlen"}`);
-  }
-  return result;
+  throw lastErr || new Error("Ismeretlen hiba a TOP hívás során");
 }
 
 function mapAliItem(p: any): Deal {
@@ -171,7 +210,7 @@ export const handler: Handler = async (event) => {
     const ifNoneMatch = event.headers["if-none-match"];
 
     const q = (qs.get("q") || "").trim();
-    const limit = Math.max(1, Math.min(50, parseInt(qs.get("limit") || "50", 10)));
+    const limit = Math.max(1, Math.min(50, parseInt(qs.get("limit") || "40", 10))); // kicsit lejjebb, hogy gyorsabb legyen
     const wantTop = ["1", "true", "yes"].includes((qs.get("top") || "").toLowerCase());
     const sort = (qs.get("sort") || "").toLowerCase();
 
@@ -179,7 +218,7 @@ export const handler: Handler = async (event) => {
     let totalItems = 0;
 
     if (wantTop && !q) {
-      console.log("[ali.ts] Top termékek kérése (TOP gateway)");
+      console.log("[ali.ts] Top termékek kérése (TOP gateway, retry)");
       const res = await callAliTOP("aliexpress.affiliate.hotproduct.query", {
         tracking_id: String(ALIEXPRESS_TRACKING_ID),
         page_size: String(limit),
@@ -190,7 +229,7 @@ export const handler: Handler = async (event) => {
       totalItems = res.total_record_count || (rawItems?.length || 0);
 
     } else if (q) {
-      console.log(`[ali.ts] Keresés (TOP gateway): "${q}"`);
+      console.log(`[ali.ts] Keresés (TOP gateway, retry): "${q}"`);
       let sortParam = "RELEVANCE";
       if (sort === "price_asc")  sortParam = "SALE_PRICE_ASC";
       if (sort === "price_desc") sortParam = "SALE_PRICE_DESC";
@@ -229,11 +268,7 @@ export const handler: Handler = async (event) => {
     LAST_ETAG = etg;
     return {
       statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=300",
-        "ETag": etg
-      },
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300", "ETag": etg },
       body: json,
     };
   } catch (e: any) {
@@ -241,12 +276,7 @@ export const handler: Handler = async (event) => {
     if (LAST_JSON) {
       return {
         statusCode: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "public, max-age=60",
-          "ETag": LAST_ETAG,
-          "X-Fallback": "snapshot"
-        },
+        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", "ETag": LAST_ETAG, "X-Fallback": "snapshot" },
         body: LAST_JSON,
       };
     }

@@ -4,7 +4,7 @@ import type { Handler } from "@netlify/functions";
 import crypto from "crypto";
 import axios from "axios";
 
-// Típusok
+// ===== Types =====
 type Deal = {
   id: string;
   src: "aliexpress";
@@ -21,19 +21,15 @@ type Deal = {
   tags?: string[];
 };
 
-// ENV
+// ===== ENV =====
 const {
   ALIEXPRESS_APP_KEY,
   ALIEXPRESS_APP_SECRET,
   ALIEXPRESS_TRACKING_ID,
 } = process.env;
 
-// Cache
-let LAST_JSON = "";
-let LAST_ETAG = "";
-
-// Segédek
-const md5 = (s: string) => crypto.createHash("md5").update(s).digest("hex");
+// ===== Small utils =====
+const md5 = (s: string) => crypto.createHash("md5").update(s, "utf8").digest("hex");
 const etagOf = (json: string) => md5(json);
 
 function toISO(d?: string | number | Date) {
@@ -65,64 +61,80 @@ function normalizeUrl(u?: string): string | undefined {
   try { return encodeURI(https); } catch { return https; }
 }
 
-/**
- * Helyes AliExpress Portals sign képzés:
- * - Vegyünk MINDEN paramétert (app_key, method, sign_method, format, timestamp, és az API own paramokat),
- * - rendezzük ABC szerint kulcs alapján,
- * - fűzzük össze "key + value" formában,
- * - HMAC-SHA256(message=concatenated, key=APP_SECRET) -> hex uppercase
- *
- * FONTOS: nincs method-prefix, nincs secret-concat az üzenetben!
- */
-function makeAliSignature(allParams: Record<string, string>): string {
-  if (!ALIEXPRESS_APP_SECRET) throw new Error("ALIEXPRESS_APP_SECRET hiányzik");
-  const keys = Object.keys(allParams)
-    .filter(k => k !== "sign" && allParams[k] !== undefined && allParams[k] !== null)
-    .sort();
-  const toSign = keys.map(k => `${k}${allParams[k]}`).join("");
-  return crypto.createHmac("sha256", ALIEXPRESS_APP_SECRET).update(toSign).digest("hex").toUpperCase();
+// Shanghai timestamp (YYYY-MM-DD HH:mm:ss) – Shanghai UTC+8, nincs DST
+function shanghaiTimestamp(): string {
+  const t = new Date(Date.now() + 8 * 3600 * 1000);
+  return t.toISOString().slice(0, 19).replace("T", " ");
 }
 
-async function callAli(method: string, apiParams: Record<string, any>) {
+/**
+ * TOP (Affiliate) aláírás:
+ * 1) v=2.0, sign_method=md5, format=json, method, app_key, timestamp (Asia/Shanghai), + API paramok
+ * 2) kulcs szerint ASCII/ABC sorrend, 'sign' nélkül
+ * 3) összefűzés: secret + (k1v1k2v2...) + secret
+ * 4) MD5 -> UPPERCASE
+ * Források/Logika: TOP/AE affiliate példa és doksi. 
+ */
+function signTOP(allParamsNoSign: Record<string, string>): string {
+  if (!ALIEXPRESS_APP_SECRET) throw new Error("ALIEXPRESS_APP_SECRET hiányzik");
+  const keys = Object.keys(allParamsNoSign)
+    .filter(k => allParamsNoSign[k] !== undefined && allParamsNoSign[k] !== null)
+    .sort();
+  const concat = keys.map(k => `${k}${allParamsNoSign[k]}`).join("");
+  const bookended = `${ALIEXPRESS_APP_SECRET}${concat}${ALIEXPRESS_APP_SECRET}`;
+  return md5(bookended).toUpperCase();
+}
+
+/**
+ * TOP hívás a Taobao gatewayre (POST, x-www-form-urlencoded)
+ * Gateway: http(s)://gw.api.taobao.com/router/rest (HTTPS javasolt)
+ */
+async function callAliTOP(method: string, apiParams: Record<string, any>) {
   if (!ALIEXPRESS_APP_KEY || !ALIEXPRESS_APP_SECRET || !ALIEXPRESS_TRACKING_ID) {
     throw new Error("AliExpress API környezeti változók hiányoznak");
   }
 
-  // A timestamp MÁSODPERC-ben!
-  const tsSec = Math.floor(Date.now() / 1000);
-
-  // mindent stringgé konvertálunk
+  // minden param string legyen
   const apiStr: Record<string, string> = Object.fromEntries(
     Object.entries(apiParams)
       .filter(([, v]) => v !== undefined && v !== null)
       .map(([k, v]) => [k, String(v)])
   );
 
-  const baseParams: Record<string, string> = {
-    app_key: ALIEXPRESS_APP_KEY,
-    format: "json",
+  const base: Record<string, string> = {
     method,
-    sign_method: "sha256",
-    timestamp: String(tsSec),
+    app_key: ALIEXPRESS_APP_KEY,
+    sign_method: "md5",
+    timestamp: shanghaiTimestamp(), // pl. "2025-10-01 20:15:03"
+    format: "json",
+    v: "2.0",
     ...apiStr,
   };
 
-  const sign = makeAliSignature(baseParams);
+  const sign = signTOP(base);
 
-  const { data } = await axios.get("https://api-sg.aliexpress.com/sync", {
-    params: { ...baseParams, sign },
-    timeout: 15000,
-  });
+  const body = new URLSearchParams({ ...base, sign });
+
+  // TOP gateway – HTTPS használata
+  const { data } = await axios.post(
+    "https://gw.api.taobao.com/router/rest",
+    body.toString(),
+    {
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=utf-8" },
+      timeout: 15000,
+    }
+  );
 
   if (data?.error_response) {
-    const msg = data.error_response?.msg || "AliExpress API hiba";
-    const code = data.error_response?.code || "?";
+    const msg = data.error_response?.sub_msg || data.error_response?.msg || "AliExpress API hiba";
+    const code = data.error_response?.code || data.error_response?.sub_code || "?";
     throw new Error(`${msg} (code: ${code})`);
   }
 
+  // Válasz kulcs pl.: aliexpress_affiliate_product_query_response
   const topKey = Object.keys(data)[0];
   const result = data?.[topKey]?.result;
-  if (!result || result.resp_code !== 200) {
+  if (!result || result?.resp_code !== 200) {
     throw new Error(`AliExpress API hiba: ${result?.resp_msg || "Ismeretlen"}`);
   }
   return result;
@@ -148,7 +160,11 @@ function mapAliItem(p: any): Deal {
   };
 }
 
-// Handler
+// ===== ETag cache (nem kötelező) =====
+let LAST_JSON = "";
+let LAST_ETAG = "";
+
+// ===== Handler =====
 export const handler: Handler = async (event) => {
   try {
     const qs = new URLSearchParams(event.queryStringParameters || {});
@@ -163,25 +179,29 @@ export const handler: Handler = async (event) => {
     let totalItems = 0;
 
     if (wantTop && !q) {
-      console.log("[ali.ts] Top termékek kérése");
-      const res = await callAli("aliexpress.affiliate.hotproduct.query", {
+      console.log("[ali.ts] Top termékek kérése (TOP gateway)");
+      const res = await callAliTOP("aliexpress.affiliate.hotproduct.query", {
         tracking_id: String(ALIEXPRESS_TRACKING_ID),
         page_size: String(limit),
+        target_currency: "USD",
+        target_language: "EN",
       });
       rawItems = res.products?.product || [];
       totalItems = res.total_record_count || (rawItems?.length || 0);
 
     } else if (q) {
-      console.log(`[ali.ts] Keresés: "${q}"`);
+      console.log(`[ali.ts] Keresés (TOP gateway): "${q}"`);
       let sortParam = "RELEVANCE";
       if (sort === "price_asc")  sortParam = "SALE_PRICE_ASC";
       if (sort === "price_desc") sortParam = "SALE_PRICE_DESC";
 
-      const res = await callAli("aliexpress.affiliate.product.query", {
+      const res = await callAliTOP("aliexpress.affiliate.product.query", {
         keywords: q,
         tracking_id: String(ALIEXPRESS_TRACKING_ID),
         page_size: String(limit),
         sort: sortParam,
+        target_currency: "USD",
+        target_language: "EN",
       });
       rawItems = res.products?.product || [];
       totalItems = res.total_record_count || (rawItems?.length || 0);
@@ -209,7 +229,11 @@ export const handler: Handler = async (event) => {
     LAST_ETAG = etg;
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300", "ETag": etg },
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "public, max-age=300",
+        "ETag": etg
+      },
       body: json,
     };
   } catch (e: any) {
@@ -217,7 +241,12 @@ export const handler: Handler = async (event) => {
     if (LAST_JSON) {
       return {
         statusCode: 200,
-        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", "ETag": LAST_ETAG, "X-Fallback": "snapshot" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=60",
+          "ETag": LAST_ETAG,
+          "X-Fallback": "snapshot"
+        },
         body: LAST_JSON,
       };
     }

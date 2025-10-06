@@ -66,10 +66,11 @@ function inferStore(d: Deal): string {
   return "Egyéb";
 }
 
-async function getItems(url: string): Promise<Deal[]> {
+async function getItems(url: string): Promise<{ items: Deal[]; meta?: any }> {
   const r = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
+  if (!r.ok) return { items: [] }; // Hiba esetén üres tömb
   const j = await r.json();
-  return j.items || [];
+  return { items: j.items || [], meta: j.meta };
 }
 
 export function DealsList({
@@ -178,38 +179,37 @@ export function DealsList({
     }
 
     // --- NINCS keresőszó: forrás szerint ---
-    const source = filters.source || "sheets";
-    let url = "";
+   onst source = filters.source || "sheets";
+let url = "";
 
-    if (source === "sheets") {
-      url =
-        `/.netlify/functions/coupons?` +
-        new URLSearchParams(
-          Object.entries({
-            wh: filters.wh || undefined,
-            store: filters.store || undefined,
-            sort: filters.sort || undefined,
-            limit: filters.limit ?? 200,
-            _: ts,
-          }).filter(([, v]) => v !== undefined) as any
-        ).toString();
-    } else if (source === "banggood") {
-      url = `/.netlify/functions/bg?` + new URLSearchParams({ limit: String(filters.limit ?? 200), _: ts }).toString();
-    } else {
-      url = `/.netlify/functions/ali?` + new URLSearchParams({ top: "1", limit: "100", _: ts }).toString();
+if (source === "sheets") {
+  url = `/.netlify/functions/coupons?` + new URLSearchParams(/*...*/).toString();
+} else if (source === "banggood") {
+  url = `/.netlify/functions/bg?` + new URLSearchParams(/*...*/).toString();
+} else {
+  url = `/.netlify/functions/ali?` + new URLSearchParams(/*...*/).toString();
+}
+
+getItems(url)
+  .then((response) => { // A `response` most már { items: [], meta: {} }
+    if (!alive) return;
+
+    // Használjuk a backend meta adatait, ha léteznek!
+    if (response.meta && response.meta.stores) {
+        onMeta?.({
+            warehouses: response.meta.warehouses || [],
+            stores: response.meta.stores || []
+        });
     }
 
-    getItems(url)
-      .then((list) => {
-        if (!alive) return;
-        const finalItems = applyFilters(list);
-        setItems(finalItems);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    // A termékekkel pedig dolgozzunk tovább a régimódon
+    const finalItems = applyFilters(response.items);
+    setItems(finalItems);
+    setLoading(false);
+  })
+  .catch(() => setLoading(false));
 
-    return () => { alive = false; };
-  }, [JSON.stringify(filters), onMeta]);
+return () => { alive = false; };
 
   async function copyCode(e: React.MouseEvent, deal: Deal) {
     e.preventDefault();

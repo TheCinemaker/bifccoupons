@@ -1,7 +1,5 @@
-// frontend/src/components/DealsList.tsx
 import React, { useEffect, useState, useRef } from "react";
 
-// Típusok és segédfüggvények
 type Deal = {
   id: string;
   src: string;
@@ -25,7 +23,6 @@ function formatPrice(v?: number, cur?: string) {
   return `${sym}${v.toFixed(2)}`;
 }
 
-// ✅ HELYES fallback data URL (nem "data-image", hanem "data:image")
 const FALLBACK_SVG =
   "data:image/svg+xml;charset=utf-8," +
   encodeURIComponent(
@@ -39,34 +36,83 @@ export function DealsList({ filters }: { filters: any }) {
   const [items, setItems] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  // A párhuzamos kérések kizárásához
   const fetchIdRef = useRef(0);
 
   useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      const fetchDeals = async () => {
-        const currentFetchId = ++fetchIdRef.current;
+    const debounce = setTimeout(() => {
+      const run = async () => {
+        const id = ++fetchIdRef.current;
         setLoading(true);
-
         try {
           const q = (filters.q || "").trim();
-          let finalItems: Deal[] = [];
+          let final: Deal[] = [];
 
-          console.log(
-            `--- [DealsList] Új futás #${currentFetchId} | Keresőszó: "${q}" | Bolt: "${filters.store || "Nincs"}" ---`
-          );
-
-          // 1) KERESÉS mód
+          // ---------- KERESÉS: minden forrást párhuzamosan, célzott QS-sel ----------
           if (q) {
-            console.log(`[DealsList] #${currentFetchId} MÓD: KERESÉS`);
-            const qs = new URLSearchParams(filters as any).toString();
-            const urls = [
-              `/.netlify/functions/coupons?${qs}`,
-              `/.netlify/functions/bg?${qs}`,
-              `/.netlify/functions/ali?${qs}`,
-            ];
+            const lim = String(filters.limit ?? 200);
 
+            // Sheets aggregátor (NE adjuk át a store-t itt!)
+            const couponsURL =
+              "/.netlify/functions/coupons?" +
+              new URLSearchParams({
+                q,
+                limit: lim,
+                wh: filters.wh || "",
+              }).toString();
+
+            // Ali keresés
+            const aliURL =
+              "/.netlify/functions/ali?" +
+              new URLSearchParams({
+                q,
+                limit: String(Math.min(Number(lim), 100)),
+              }).toString();
+
+            // Banggood live + katalógus fallback
+            const bgURL =
+              "/.netlify/functions/bg?" +
+              new URLSearchParams({
+                q,
+                limit: lim,
+                catalog: "1",
+              }).toString();
+
+            const [a, b, c] = await Promise.all(
+              [couponsURL, aliURL, bgURL].map((u) =>
+                fetch(u)
+                  .then((r) => (r.ok ? r.json() : { items: [] }))
+                  .catch(() => ({ items: [] }))
+              )
+            );
+            if (id !== fetchIdRef.current) return;
+            final = [...(a.items || []), ...(b.items || []), ...(c.items || [])];
+          }
+          // ---------- BOLT nézet ----------
+          else if (filters.store) {
+            let url = "";
+            if (filters.store === "AliExpress") {
+              url = "/.netlify/functions/ali?top=1&limit=200";
+            } else {
+              url =
+                "/.netlify/functions/coupons?" +
+                new URLSearchParams({
+                  store: String(filters.store),
+                  limit: "200",
+                  wh: filters.wh || "",
+                }).toString();
+            }
+            const res = await fetch(url).then((r) => r.json());
+            if (id !== fetchIdRef.current) return;
+            final = res.items || [];
+          }
+          // ---------- KEZDŐLAP ----------
+          else {
+            const urls = [
+              "/.netlify/functions/coupons?store=Banggood&limit=6",
+              "/.netlify/functions/coupons?store=Geekbuying&limit=6",
+              "/.netlify/functions/ali?top=1&limit=6",
+              "/.netlify/functions/bg?top=1&limit=6",
+            ];
             const results = await Promise.all(
               urls.map((u) =>
                 fetch(u)
@@ -74,66 +120,31 @@ export function DealsList({ filters }: { filters: any }) {
                   .catch(() => ({ items: [] }))
               )
             );
-
-            if (currentFetchId !== fetchIdRef.current) {
-              console.log(`[DealsList] #${currentFetchId} Elavult kérés, eldobva.`);
-              return;
-            }
-            finalItems = results.flatMap((r) => r.items || []);
-
-          // 2) BOLT NÉZET
-          } else if (filters.store) {
-            let url = "";
-            switch (filters.store) {
-              case "AliExpress":
-                url = `/.netlify/functions/ali?top=1&limit=200`;
-                break;
-              default:
-                url = `/.netlify/functions/coupons?store=${encodeURIComponent(
-                  filters.store
-                )}&limit=200`;
-                break;
-            }
-            if (url) {
-              const res = await fetch(url).then((r) => r.json());
-              if (currentFetchId === fetchIdRef.current) finalItems = res.items || [];
-            }
-
-          // 3) ALAPÉRTELMEZETT NÉZET
-          } else {
-            const defaultUrls = [
-              "/.netlify/functions/coupons?store=Banggood&limit=3",
-              "/.netlify/functions/coupons?store=Geekbuying&limit=3",
-              "/.netlify/functions/coupons?store=Gshopper&limit=3",
-              "/.netlify/functions/ali?top=1&limit=3",
-              "/.netlify/functions/bg?top=1&limit=3",
-            ];
-            const results = await Promise.all(
-              defaultUrls.map((u) =>
-                fetch(u)
-                  .then((r) => (r.ok ? r.json() : { items: [] }))
-                  .catch(() => ({ items: [] }))
-              )
-            );
-            if (currentFetchId === fetchIdRef.current)
-              finalItems = results.flatMap((r) => r.items || []);
+            if (id !== fetchIdRef.current) return;
+            final = results.flatMap((x) => x.items || []);
           }
 
-          if (currentFetchId !== fetchIdRef.current) {
-            console.log(
-              `[DealsList] #${currentFetchId} Elavult kérés a feldolgozás előtt, eldobva.`
+          // utólagos store/wh/ár szűrők (ha vannak)
+          if (filters.store) {
+            final = final.filter(
+              (d) => (d.store || d.src || "").toLowerCase() === String(filters.store).toLowerCase()
             );
-            return;
+          }
+          if (filters.wh) {
+            const WH = String(filters.wh).toUpperCase();
+            final = final.filter((d) => !d.wh || String(d.wh).toUpperCase() === WH);
+          }
+          if (filters.minPrice != null) {
+            final = final.filter((d) => (d.price ?? Infinity) >= Number(filters.minPrice));
+          }
+          if (filters.maxPrice != null) {
+            final = final.filter((d) => (d.price ?? 0) <= Number(filters.maxPrice));
           }
 
-          console.log(
-            `[DealsList] #${currentFetchId} Találatok feldolgozás előtt: ${finalItems.length} db`
-          );
-
-          // Dedupe
+          // dedupe
           const seen = new Set<string>();
           const uniq: Deal[] = [];
-          for (const d of finalItems) {
+          for (const d of final) {
             const key = `${d.url}|${d.code || ""}`;
             if (!seen.has(key)) {
               seen.add(key);
@@ -141,29 +152,25 @@ export function DealsList({ filters }: { filters: any }) {
             }
           }
 
-          // Rendezés
-          const s = filters.sort;
-          if (s === "price_asc")
+          // rendezés
+          if (filters.sort === "price_asc") {
             uniq.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
-          else if (s === "price_desc")
+          } else if (filters.sort === "price_desc") {
             uniq.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
+          }
 
-          console.log(
-            `[DealsList] #${currentFetchId} Végleges, egyedi találatok: ${uniq.length} db`
-          );
           setItems(uniq);
-        } catch (error) {
-          console.error(`[DealsList] #${fetchIdRef.current} VÉGZETES HIBA:`, error);
+        } catch (e) {
+          console.error("[DealsList] error:", e);
           setItems([]);
         } finally {
           setLoading(false);
         }
       };
+      run();
+    }, 250);
 
-      fetchDeals();
-    }, 300);
-
-    return () => clearTimeout(debounceTimer);
+    return () => clearTimeout(debounce);
   }, [JSON.stringify(filters)]);
 
   async function copyCode(e: React.MouseEvent, deal: Deal) {
@@ -172,10 +179,7 @@ export function DealsList({ filters }: { filters: any }) {
     try {
       await navigator.clipboard.writeText(deal.code);
       setCopiedId(deal.id);
-      setTimeout(
-        () => setCopiedId((id) => (id === deal.id ? null : id)),
-        1500
-      );
+      setTimeout(() => setCopiedId((id) => (id === deal.id ? null : id)), 1500);
     } catch {}
   }
 
@@ -198,10 +202,7 @@ export function DealsList({ filters }: { filters: any }) {
     return (
       <div className="p-6 text-center text-neutral-400">
         <h3 className="text-lg font-semibold text-white mb-2">Nincs találat</h3>
-        <p>
-          Próbálj más kulcsszót, vagy válassz egy boltot a fenti listából a
-          legnépszerűbb termékekért.
-        </p>
+        <p>Próbálj más kulcsszót, vagy válassz egy boltot a fenti listából.</p>
       </div>
     );
   }
@@ -221,9 +222,7 @@ export function DealsList({ filters }: { filters: any }) {
 
         const price = formatPrice(d.price, d.cur);
         const orig = d.orig ? formatPrice(d.orig, d.cur) : "";
-        const ends = d.end
-          ? `lejár: ${new Date(d.end).toLocaleDateString("hu-HU")}`
-          : "";
+        const ends = d.end ? `lejár: ${new Date(d.end).toLocaleDateString("hu-HU")}` : "";
 
         return (
           <a
@@ -242,7 +241,6 @@ export function DealsList({ filters }: { filters: any }) {
                 decoding="async"
                 draggable={false}
                 onError={(e) => {
-                  // ne legyen végtelen ciklus: előbb letiltjuk az onerror-t
                   const img = e.currentTarget as HTMLImageElement;
                   img.onerror = null;
                   img.src = FALLBACK_SVG;
@@ -260,9 +258,7 @@ export function DealsList({ filters }: { filters: any }) {
 
             <div className="text-sm text-neutral-200">
               {price}
-              {orig ? (
-                <span className="line-through opacity-60 ml-2">{orig}</span>
-              ) : null}
+              {orig ? <span className="line-through opacity-60 ml-2">{orig}</span> : null}
             </div>
 
             <div className="text-xs text-neutral-500 mt-1">
@@ -284,9 +280,7 @@ export function DealsList({ filters }: { filters: any }) {
                 </button>
               </div>
             ) : (
-              <div className="mt-3 text-xs text-neutral-400">
-                Nincs kuponkód – akciós ár
-              </div>
+              <div className="mt-3 text-xs text-neutral-400">Nincs kuponkód – akciós ár</div>
             )}
           </a>
         );

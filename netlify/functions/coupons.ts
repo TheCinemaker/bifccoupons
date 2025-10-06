@@ -2,7 +2,7 @@ import type { Handler } from "@netlify/functions";
 import crypto from "crypto";
 import { google } from "googleapis";
 
-/* ====== Types ====== */
+/* ===== Types ===== */
 type Deal = {
   id: string;
   src: "sheets";
@@ -21,18 +21,16 @@ type Deal = {
   tags?: string[];
 };
 
-/* ====== Sheets: pontos tartományok, első 200 sor ====== */
 const SHEET_RANGES = [
-  "'BG Unique'!A1:N200",
+  "'Banggood'!A1:N200",
   "'BG Unique HUN'!A1:N200",
   "'Geekbuying Unique'!A1:N200",
-  "'Geekbuying'!A1:N200",
 ] as const;
 
-/* ====== ENV ====== */
+/* ===== ENV ===== */
 const { SPREADSHEET_ID, GOOGLE_APPLICATION_CREDENTIALS_JSON } = process.env;
 
-/* ====== Utils ====== */
+/* ===== Utils ===== */
 const md5 = (s: string) => crypto.createHash("md5").update(s).digest("hex");
 const etagOf = (json: string) => md5(json);
 
@@ -63,7 +61,7 @@ function extractSheetName(range: string): string {
   return m?.[1] || "Unknown";
 }
 function mapSheetToStore(name: string): Deal["store"] {
-  return /geek/i.test(name) ? "Geekbuying" : "Banggood";
+  return name.toLowerCase().includes("geek") ? "Geekbuying" : "Banggood";
 }
 function stableDedupe(items: Deal[]): Deal[] {
   const seen = new Set<string>();
@@ -78,7 +76,6 @@ function pickImage(raw: any): string | undefined {
   if (!raw) return undefined;
   let s = String(raw).trim();
   if (!s) return undefined;
-  // =IMAGE("...") formula támogatás
   const m = s.match(/image\s*\(\s*["']([^"']+)["']/i);
   if (m?.[1]) s = m[1];
   if (s.startsWith("//")) s = "https:" + s;
@@ -86,7 +83,7 @@ function pickImage(raw: any): string | undefined {
   try { return encodeURI(s); } catch { return s; }
 }
 
-/* ====== Google Sheets fetch (TOP 200, TOP-DOWN, minden lap) ====== */
+/* ===== Sheets fetch (TOP 200, TOP-DOWN) ===== */
 async function fetchSheetsTop200(): Promise<Deal[]> {
   if (!SPREADSHEET_ID || !GOOGLE_APPLICATION_CREDENTIALS_JSON) return [];
 
@@ -109,15 +106,13 @@ async function fetchSheetsTop200(): Promise<Deal[]> {
   for (const vr of resp.data.valueRanges || []) {
     const sheetName = extractSheetName(vr.range || "");
     const store = mapSheetToStore(sheetName);
-
     const rows = vr.values || [];
-    if (rows.length < 2) continue; // nincs adat
+    if (rows.length < 2) continue;
 
     // A:0 Image, B:1 Product name, C:2 ProductID, D:3 Link, E:4 Orig, F:5 Disc,
     // G:6 Coupon price, H:7 Coupon code, I:8 Qty, J:9 Warehouse, K:10 Categories,
     // L:11 Start time, M:12 End time, N:13 Update time
 
-    // FONTOS: a 2. sortól lefelé → TOP-DOWN
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r];
       if (!row) continue;
@@ -125,7 +120,6 @@ async function fetchSheetsTop200(): Promise<Deal[]> {
       const image = pickImage(row[0]);
       const title = row[1] ? String(row[1]).trim() : "";
       const link  = row[3] ? String(row[3]).trim() : "";
-
       if (!title || !link) continue;
 
       out.push({
@@ -150,7 +144,7 @@ async function fetchSheetsTop200(): Promise<Deal[]> {
   return stableDedupe(out);
 }
 
-/* ====== Handler ====== */
+/* ===== Handler ===== */
 let LAST_JSON = ""; let LAST_ETAG = "";
 
 export const handler: Handler = async (event) => {
@@ -160,7 +154,7 @@ export const handler: Handler = async (event) => {
 
     const q = (qs.get("q") || "").toLowerCase().trim();
     const wh = (qs.get("wh") || "").toUpperCase().trim();
-    const store = (qs.get("store") || "").trim(); // "Banggood" | "Geekbuying"
+    const store = (qs.get("store") || "").trim();
     const minPrice = qs.get("minPrice") ? Number(qs.get("minPrice")) : undefined;
     const maxPrice = qs.get("maxPrice") ? Number(qs.get("maxPrice")) : undefined;
 
@@ -168,18 +162,15 @@ export const handler: Handler = async (event) => {
     const cursor = qs.get("cursor");
     const start  = cursor ? (parseInt(cursor, 10) || 0) : 0;
 
-    // 1) LEGFELSŐ 200 SOR / LAP, TOP-DOWN (MINDEN LAP)
+    // 1) ALL sheets (top-down)
     const all = await fetchSheetsTop200();
 
-    // --- META a TELJES adathalmazból (lenyílókhoz TELJES lista!) ---
-    const metaWarehouses = Array.from(new Set(
-      all.map(x => x.wh).filter(Boolean) as string[]
-    )).sort((a,b)=>a.localeCompare(b));
+    // --- meta a TELJES halmazból ---
+    const metaWarehouses = Array.from(new Set(all.map(x => x.wh).filter(Boolean) as string[])).sort((a,b)=>a.localeCompare(b));
     const metaStores: Array<Deal["store"]> = ["Banggood", "Geekbuying"];
 
-    // 2) Front-kompat szűrések – NEM RENDEZÜNK, csak szűrünk
+    // 2) szűrés (nincs extra rendezés)
     let items = all;
-
     if (q) {
       items = items.filter(d =>
         d.title.toLowerCase().includes(q) ||
@@ -192,7 +183,7 @@ export const handler: Handler = async (event) => {
     if (typeof minPrice === "number") items = items.filter(d => (d.price ?? Infinity) >= minPrice);
     if (typeof maxPrice === "number") items = items.filter(d => (d.price ?? 0) <= maxPrice);
 
-    // 3) Lapozás: TOP-DOWN sorrend marad
+    // 3) lapozás
     const page = items.slice(start, start + limit);
     const nextCursor = start + limit < items.length ? String(start + limit) : null;
 
@@ -221,7 +212,6 @@ export const handler: Handler = async (event) => {
       body: json,
     };
   } catch (e:any) {
-    // Snapshot fallback
     if (LAST_JSON) {
       return {
         statusCode: 200,

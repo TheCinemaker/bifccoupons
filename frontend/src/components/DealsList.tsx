@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 
 type Deal = {
   id: string;
-  src?: string;    // "sheets" | "banggood" | "aliexpress"
-  store?: string;  // "Banggood" | "Geekbuying" | "AliExpress" | …
+  src?: string;
+  store?: string;
   title: string;
   url: string;
   short?: string;
@@ -90,166 +90,125 @@ export function DealsList({
     const q = (filters.q || "").trim();
     const hasQuery = q.length > 0;
     const lim = String(filters.limit ?? 200);
+    const ts = String(Date.now()); // cache buster
 
-    // ---------- KERESŐ: mindhárom forrás egyszerre ----------
+    const applyFilters = (arr: Deal[]) => {
+      let merged = arr.slice();
+
+      if (filters.store) {
+        const want = String(filters.store).toLowerCase();
+        merged = merged.filter((d) => inferStore(d).toLowerCase() === want);
+      }
+      if (filters.wh) {
+        const WH = String(filters.wh).toUpperCase();
+        merged = merged.filter((d) => {
+          const DW = (d.wh || "").toUpperCase();
+          if (!DW) return true;
+          if (WH === "EU") return DW !== "CN"; // EU = nem CN
+          return DW === WH;
+        });
+      }
+      if (filters.minPrice != null) merged = merged.filter((d) => (d.price ?? Infinity) >= Number(filters.minPrice));
+      if (filters.maxPrice != null) merged = merged.filter((d) => (d.price ?? 0) <= Number(filters.maxPrice));
+
+      if (filters.sort === "price_asc") {
+        merged.sort((x, y) => (x.price ?? Infinity) - (y.price ?? Infinity));
+      } else if (filters.sort === "price_desc") {
+        merged.sort((x, y) => (y.price ?? -Infinity) - (x.price ?? -Infinity));
+      } else if (filters.sort === "store_asc" || filters.sort === "store_desc") {
+        merged.sort((x, y) => {
+          const ax = inferStore(x).toLowerCase();
+          const ay = inferStore(y).toLowerCase();
+          const cmp = ax.localeCompare(ay);
+          return filters.sort === "store_asc" ? cmp : -cmp;
+        });
+      } else {
+        // okos rangsor
+        merged.sort((a, b) => {
+          let sa = 0, sb = 0;
+          const wA = (a.wh || "").toUpperCase();
+          const wB = (b.wh || "").toUpperCase();
+          if (wA && wA !== "CN") sa += 10;
+          if (wB && wB !== "CN") sb += 10;
+          if (a.end) {
+            const da = Math.max(0, (new Date(a.end).getTime() - Date.now()) / 86400000);
+            sa += 10 - Math.min(10, da);
+          }
+          if (b.end) {
+            const db = Math.max(0, (new Date(b.end).getTime()) - Date.now()) / 86400000;
+            sb += 10 - Math.min(10, db);
+          }
+          if (a.price != null && a.orig && a.price < a.orig) {
+            sa += Math.min(8, Math.max(0, (100 * (1 - a.price / a.orig)) / 5));
+          }
+          if (b.price != null && b.orig && b.price < b.orig) {
+            sb += Math.min(8, Math.max(0, (100 * (1 - b.price / b.orig)) / 5));
+          }
+          return sb - sa;
+        });
+      }
+
+      const warehouses = Array.from(new Set(merged.map((d) => (d.wh || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      const stores = Array.from(new Set(merged.map(inferStore))).sort((a, b) => a.localeCompare(b));
+      onMeta?.({ warehouses, stores });
+
+      return merged;
+    };
+
+    // --- KERESŐ: mindhárom forrás párhuzamosan ---
     if (hasQuery) {
       const couponsURL = `/.netlify/functions/coupons?` +
-        new URLSearchParams({ q, limit: lim, wh: filters.wh || "" }).toString();
-
+        new URLSearchParams({ q, limit: lim, wh: filters.wh || "", _: ts }).toString();
       const aliURL = `/.netlify/functions/ali?` +
-        new URLSearchParams({ q, limit: String(Math.min(Number(lim), 100)) }).toString();
-
+        new URLSearchParams({ q, limit: String(Math.min(Number(lim), 100)), _: ts }).toString();
       const bgURL = `/.netlify/functions/bg?` +
-        new URLSearchParams({ q, limit: lim, catalog: "1" }).toString();
+        new URLSearchParams({ q, limit: lim, catalog: "1", _: ts }).toString();
 
       Promise.all([getItems(couponsURL), getItems(aliURL), getItems(bgURL)])
         .then(([a, b, c]) => {
           if (!alive) return;
-          let merged = dedupe([...a, ...b, ...c]);
-
-          // bolt szűrő
-          if (filters.store) {
-            const want = String(filters.store).toLowerCase();
-            merged = merged.filter((d) => inferStore(d).toLowerCase() === want);
-          }
-          // raktár szűrő – EU = bármi ami nem CN
-          if (filters.wh) {
-            const WH = String(filters.wh).toUpperCase();
-            merged = merged.filter((d) => {
-              const DW = (d.wh || "").toUpperCase();
-              if (!DW) return true;
-              if (WH === "EU") return DW !== "CN";
-              return DW === WH;
-            });
-          }
-          // ár szűrő
-          if (filters.minPrice != null) merged = merged.filter((d) => (d.price ?? Infinity) >= Number(filters.minPrice));
-          if (filters.maxPrice != null) merged = merged.filter((d) => (d.price ?? 0) <= Number(filters.maxPrice));
-
-          // rendezés
-          if (filters.sort === "price_asc") {
-            merged.sort((x, y) => (x.price ?? Infinity) - (y.price ?? Infinity));
-          } else if (filters.sort === "price_desc") {
-            merged.sort((x, y) => (y.price ?? -Infinity) - (x.price ?? -Infinity));
-          } else if (filters.sort === "store_asc" || filters.sort === "store_desc") {
-            merged.sort((x, y) => {
-              const ax = inferStore(x).toLowerCase();
-              const ay = inferStore(y).toLowerCase();
-              const cmp = ax.localeCompare(ay);
-              return filters.sort === "store_asc" ? cmp : -cmp;
-            });
-          } else {
-            // okos alap
-            merged.sort((a, b) => {
-              let sa = 0, sb = 0;
-              const wA = (a.wh || "").toUpperCase();
-              const wB = (b.wh || "").toUpperCase();
-              if (wA && wA !== "CN") sa += 10;
-              if (wB && wB !== "CN") sb += 10;
-              if (a.end) {
-                const da = Math.max(0, (new Date(a.end).getTime() - Date.now()) / 86400000);
-                sa += 10 - Math.min(10, da);
-              }
-              if (b.end) {
-                const db = Math.max(0, (new Date(b.end).getTime() - Date.now()) / 86400000);
-                sb += 10 - Math.min(10, db);
-              }
-              if (a.price != null && a.orig && a.price < a.orig) {
-                sa += Math.min(8, Math.max(0, (100 * (1 - a.price / a.orig)) / 5));
-              }
-              if (b.price != null && b.orig && b.price < b.orig) {
-                sb += Math.min(8, Math.max(0, (100 * (1 - b.price / b.orig)) / 5));
-              }
-              return sb - sa;
-            });
-          }
-
-          // meta feltöltés
-          const warehouses = Array.from(new Set(merged.map((d) => (d.wh || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-          const stores = Array.from(new Set(merged.map(inferStore))).sort((a, b) => a.localeCompare(b));
-          onMeta?.({ warehouses, stores });
-
-          setItems(merged);
+          const merged = dedupe([...a, ...b, ...c]);
+          const finalItems = applyFilters(merged);
+          setItems(finalItems);
           setLoading(false);
         })
         .catch(() => setLoading(false));
 
-      return () => {
-        alive = false;
-      };
+      return () => { alive = false; };
     }
 
-    // ---------- NINCS keresőszó: forrás alapján ----------
+    // --- NINCS keresőszó: forrás szerint ---
     const source = filters.source || "sheets";
     let url = "";
 
     if (source === "sheets") {
-      url = `/.netlify/functions/coupons?` + new URLSearchParams(
-        Object.entries({
-          wh: filters.wh || undefined,
-          store: filters.store || undefined,
-          sort: filters.sort || undefined,
-          limit: filters.limit ?? 200,
-        }).filter(([, v]) => v !== undefined) as any
-      ).toString();
+      url =
+        `/.netlify/functions/coupons?` +
+        new URLSearchParams(
+          Object.entries({
+            wh: filters.wh || undefined,
+            store: filters.store || undefined,
+            sort: filters.sort || undefined,
+            limit: filters.limit ?? 200,
+            _: ts,
+          }).filter(([, v]) => v !== undefined) as any
+        ).toString();
     } else if (source === "banggood") {
-      url = `/.netlify/functions/bg?` + new URLSearchParams({ limit: String(filters.limit ?? 200) }).toString();
+      url = `/.netlify/functions/bg?` + new URLSearchParams({ limit: String(filters.limit ?? 200), _: ts }).toString();
     } else {
-      // aliexpress
-      url = `/.netlify/functions/ali?` + new URLSearchParams({ top: "1", limit: String(Math.min(Number(filters.limit ?? 200), 200)) }).toString();
+      url = `/.netlify/functions/ali?` + new URLSearchParams({ top: "1", limit: "100", _: ts }).toString();
     }
 
     getItems(url)
       .then((list) => {
         if (!alive) return;
-        let merged = list.slice();
-
-        if (filters.store) {
-          const want = String(filters.store).toLowerCase();
-          merged = merged.filter((d) => inferStore(d).toLowerCase() === want);
-        }
-        if (filters.wh) {
-          const WH = String(filters.wh).toUpperCase();
-          merged = merged.filter((d) => {
-            const DW = (d.wh || "").toUpperCase();
-            if (!DW) return true;
-            if (WH === "EU") return DW !== "CN";
-            return DW === WH;
-          });
-        }
-        if (filters.minPrice != null) merged = merged.filter((d) => (d.price ?? Infinity) >= Number(filters.minPrice));
-        if (filters.maxPrice != null) merged = merged.filter((d) => (d.price ?? 0) <= Number(filters.maxPrice));
-
-        if (filters.sort === "price_asc") {
-          merged.sort((x, y) => (x.price ?? Infinity) - (y.price ?? Infinity));
-        } else if (filters.sort === "price_desc") {
-          merged.sort((x, y) => (y.price ?? -Infinity) - (x.price ?? -Infinity));
-        } else if (filters.sort === "store_asc" || filters.sort === "store_desc") {
-          merged.sort((x, y) => {
-            const ax = inferStore(x).toLowerCase();
-            const ay = inferStore(y).toLowerCase();
-            const cmp = ax.localeCompare(ay);
-            return filters.sort === "store_asc" ? cmp : -cmp;
-          });
-        }
-
-        const warehouses = Array.from(new Set(merged.map((d) => (d.wh || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-        const stores =
-          source === "banggood"
-            ? ["Banggood"]
-            : source === "aliexpress"
-            ? ["AliExpress"]
-            : Array.from(new Set(merged.map(inferStore))).sort((a, b) => a.localeCompare(b));
-
-        onMeta?.({ warehouses, stores });
-        setItems(merged);
+        const finalItems = applyFilters(list);
+        setItems(finalItems);
         setLoading(false);
       })
       .catch(() => setLoading(false));
 
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [JSON.stringify(filters), onMeta]);
 
   async function copyCode(e: React.MouseEvent, deal: Deal) {

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 
+// Típusdefiníciók
 type Deal = {
   id: string;
   src?: string;
   store?: string;
   title: string;
-  url: string;
+  url:string;
   short?: string;
   wh?: string;
   code?: string;
@@ -28,6 +29,7 @@ type Filters = {
   maxPrice?: number;
 };
 
+// Konstansok és segédfüggvények (változatlan)
 const FALLBACK_SVG =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(
@@ -66,13 +68,20 @@ function inferStore(d: Deal): string {
   return "Egyéb";
 }
 
+// JAVÍTOTT getItems: Visszaadja a teljes választ (items + meta)
 async function getItems(url: string): Promise<{ items: Deal[]; meta?: any }> {
-  const r = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
-  if (!r.ok) return { items: [] }; // Hiba esetén üres tömb
-  const j = await r.json();
-  return { items: j.items || [], meta: j.meta };
+  try {
+    const r = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
+    if (!r.ok) return { items: [] }; // Hiba esetén üres tömb
+    const j = await r.json();
+    return { items: j.items || [], meta: j.meta };
+  } catch (error) {
+    console.error("Fetch error:", error);
+    return { items: [] };
+  }
 }
 
+// A komponens
 export function DealsList({
   filters,
   onMeta,
@@ -84,6 +93,7 @@ export function DealsList({
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // JAVÍTOTT ÉS EGYSÉGESÍTETT useEffect HOOK
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -93,8 +103,9 @@ export function DealsList({
     const lim = String(filters.limit ?? 200);
     const ts = String(Date.now()); // cache buster
 
-    const applyFilters = (arr: Deal[]) => {
-      let merged = arr.slice();
+    // A szűrő és rendező logikád tökéletes, egy segédfüggvénybe szervezve
+    const applyClientSideFilters = (arr: Deal[]) => {
+      let merged = [...arr];
 
       if (filters.store) {
         const want = String(filters.store).toLowerCase();
@@ -102,15 +113,18 @@ export function DealsList({
       }
       if (filters.wh) {
         const WH = String(filters.wh).toUpperCase();
-        merged = merged.filter((d) => {
-          const DW = (d.wh || "").toUpperCase();
-          if (!DW) return true;
-          if (WH === "EU") return DW !== "CN"; // EU = nem CN
-          return DW === WH;
-        });
+        if (WH === "EU") {
+          merged = merged.filter((d) => (d.wh || "").toUpperCase() !== "CN");
+        } else {
+          merged = merged.filter((d) => (d.wh || "").toUpperCase() === WH);
+        }
       }
-      if (filters.minPrice != null) merged = merged.filter((d) => (d.price ?? Infinity) >= Number(filters.minPrice));
-      if (filters.maxPrice != null) merged = merged.filter((d) => (d.price ?? 0) <= Number(filters.maxPrice));
+      if (filters.minPrice != null) {
+        merged = merged.filter((d) => (d.price ?? Infinity) >= Number(filters.minPrice));
+      }
+      if (filters.maxPrice != null) {
+        merged = merged.filter((d) => (d.price ?? 0) <= Number(filters.maxPrice));
+      }
 
       if (filters.sort === "price_asc") {
         merged.sort((x, y) => (x.price ?? Infinity) - (y.price ?? Infinity));
@@ -136,7 +150,7 @@ export function DealsList({
             sa += 10 - Math.min(10, da);
           }
           if (b.end) {
-            const db = Math.max(0, (new Date(b.end).getTime()) - Date.now()) / 86400000;
+            const db = Math.max(0, (new Date(b.end).getTime() - Date.now()) / 86400000);
             sb += 10 - Math.min(10, db);
           }
           if (a.price != null && a.orig && a.price < a.orig) {
@@ -148,69 +162,65 @@ export function DealsList({
           return sb - sa;
         });
       }
-
-      const warehouses = Array.from(new Set(merged.map((d) => (d.wh || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-      const stores = Array.from(new Set(merged.map(inferStore))).sort((a, b) => a.localeCompare(b));
-      onMeta?.({ warehouses, stores });
-
       return merged;
     };
 
-    // --- KERESŐ: mindhárom forrás párhuzamosan ---
-    if (hasQuery) {
-      const couponsURL = `/.netlify/functions/coupons?` +
-        new URLSearchParams({ q, limit: lim, wh: filters.wh || "", _: ts }).toString();
-      const aliURL = `/.netlify/functions/ali?` +
-        new URLSearchParams({ q, limit: String(Math.min(Number(lim), 100)), _: ts }).toString();
-      const bgURL = `/.netlify/functions/bg?` +
-        new URLSearchParams({ q, limit: lim, catalog: "1", _: ts }).toString();
+    const source = filters.source || "sheets";
+
+    // --- EGYSÉGESÍTETT LOGIKA ---
+    // Ha keresünk, VAGY ha az "Összesített" (sheets) nézeten vagyunk,
+    // akkor mindhárom forrásból párhuzamosan töltünk.
+    if (hasQuery || source === "sheets") {
+      const couponsURL = `/.netlify/functions/coupons?q=${q}&limit=${lim}&_=${ts}`;
+      const aliURL = `/.netlify/functions/ali?q=${q}&top=${hasQuery ? "" : "1"}&limit=${Math.min(Number(lim), 100)}&_=${ts}`;
+      const bgURL = `/.netlify/functions/bg?q=${q}&limit=${lim}&catalog=1&_=${ts}`;
 
       Promise.all([getItems(couponsURL), getItems(aliURL), getItems(bgURL)])
-        .then(([a, b, c]) => {
+        .then(([couponsRes, aliRes, bgRes]) => {
           if (!alive) return;
-          const merged = dedupe([...a, ...b, ...c]);
-          const finalItems = applyFilters(merged);
-          setItems(finalItems);
-          setLoading(false);
+
+          // A meta adatokat a sheets/coupons végpontból vesszük, mert az a megbízható forrás.
+          const finalStores = couponsRes.meta?.stores || ["Banggood", "Geekbuying", "AliExpress"];
+          const allItems = dedupe([...couponsRes.items, ...aliRes.items, ...bgRes.items]);
+          const filteredItems = applyClientSideFilters(allItems);
+          
+          const finalWarehouses = Array.from(new Set(filteredItems.map(d => d.wh || "").filter(Boolean))).sort();
+          
+          onMeta?.({ stores: finalStores, warehouses: finalWarehouses });
+          setItems(filteredItems);
         })
-        .catch(() => setLoading(false));
+        .catch(console.error)
+        .finally(() => setLoading(false));
 
-      return () => { alive = false; };
+    } else {
+      // --- DEDIKÁLT FORRÁS (Banggood Live vagy AliExpress Top) ---
+      let url = "";
+      if (source === "banggood") {
+        url = `/.netlify/functions/bg?limit=${lim}&_=${ts}`;
+      } else { // aliexpress
+        url = `/.netlify/functions/ali?top=1&limit=100&_=${ts}`;
+      }
+
+      getItems(url)
+        .then((response) => {
+          if (!alive) return;
+          const finalItems = applyClientSideFilters(response.items);
+
+          const warehouses = Array.from(new Set(finalItems.map(d => d.wh || "").filter(Boolean))).sort();
+          const stores = Array.from(new Set(finalItems.map(inferStore))).sort();
+
+          onMeta?.({ warehouses, stores });
+          setItems(finalItems);
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false));
     }
 
-    // --- NINCS keresőszó: forrás szerint ---
-   const source = filters.source || "sheets";
-let url = "";
+    return () => { alive = false; };
+  }, [JSON.stringify(filters)]); // onMeta kivéve, mert felesleges re-run-t okozhat
 
-if (source === "sheets") {
-  url = `/.netlify/functions/coupons?` + new URLSearchParams(/*...*/).toString();
-} else if (source === "banggood") {
-  url = `/.netlify/functions/bg?` + new URLSearchParams(/*...*/).toString();
-} else {
-  url = `/.netlify/functions/ali?` + new URLSearchParams(/*...*/).toString();
-}
 
-getItems(url)
-  .then((response) => { // A `response` most már { items: [], meta: {} }
-    if (!alive) return;
-
-    // Használjuk a backend meta adatait, ha léteznek!
-    if (response.meta && response.meta.stores) {
-        onMeta?.({
-            warehouses: response.meta.warehouses || [],
-            stores: response.meta.stores || []
-        });
-    }
-
-    // A termékekkel pedig dolgozzunk tovább a régimódon
-    const finalItems = applyFilters(response.items);
-    setItems(finalItems);
-    setLoading(false);
-  })
-  .catch(() => setLoading(false));
-
-return () => { alive = false; };
-
+  // Kód másolása (változatlan)
   async function copyCode(e: React.MouseEvent, deal: Deal) {
     e.preventDefault();
     if (!deal.code) return;
@@ -221,6 +231,7 @@ return () => { alive = false; };
     } catch {}
   }
 
+  // JSX rész (változatlan)
   if (loading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-3">

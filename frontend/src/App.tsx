@@ -5,6 +5,8 @@ import { DealsList } from "./components/DealsList";
 import BlogList from "./blog/BlogList";
 import BlogPost from "./blog/BlogPost";
 
+type Meta = { warehouses: string[]; stores: string[] };
+
 function Home() {
   const [filters, setFilters] = useState<{ q?: string; wh?: string; store?: string; sort?: string; limit?: number }>({ wh: "EU", limit: 100 });
   return (
@@ -18,23 +20,22 @@ function Home() {
 }
 
 export default function App() {
+  const [filters, setFilters] = useState<{ q?: string; wh?: string; store?: string; sort?: string; limit?: number; source?: "sheets"|"banggood"|"aliexpress"; catalog?: "1" }>({ wh: "EU", limit: 100, source: "sheets" });
+  const [meta, setMeta] = useState<Meta>({ warehouses: [], stores: [] });
+
   return (
     <div className="min-h-dvh">
       <header className="px-4 py-3 border-b border-neutral-800 sticky top-0 z-30 bg-neutral-950/80 backdrop-blur">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
-          <Link to="/" className="font-bold text-white">kinabolveddmeg</Link>
-          <nav className="flex items-center gap-4 text-sm">
-            <NavLink to="/" end className={({isActive}) => isActive ? "text-amber-300" : "text-neutral-300 hover:text-white"}>Dealek</NavLink>
-            <NavLink to="/blog" className={({isActive}) => isActive ? "text-amber-300" : "text-neutral-300 hover:text-white"}>Blog</NavLink>
-          </nav>
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="font-bold">kinabolveddmeg</div>
+          <small className="text-neutral-400">PWA ✓</small>
         </div>
       </header>
 
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/blog" element={<BlogList />} />
-        <Route path="/blog/:slug" element={<BlogPost />} />
-      </Routes>
+      <FilterBar value={filters} onChange={setFilters} meta={meta} />
+      <main className="max-w-6xl mx-auto">
+        <DealsList filters={filters} onMeta={setMeta} />
+      </main>
     </div>
   );
 }

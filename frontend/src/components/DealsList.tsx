@@ -179,7 +179,7 @@ export function DealsList({
     }
 
     // --- NINCS keresőszó: forrás szerint ---
-   onst source = filters.source || "sheets";
+   const source = filters.source || "sheets";
 let url = "";
 
 if (source === "sheets") {

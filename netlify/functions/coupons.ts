@@ -22,9 +22,10 @@ type Deal = {
 };
 
 const SHEET_RANGES = [
-  "'Banggood'!A1:N200",
+  "'BG Unique'!A1:N200",
   "'BG Unique HUN'!A1:N200",
   "'Geekbuying Unique'!A1:N200",
+  "'Geekbuying'!A1:N200",
 ] as const;
 
 /* ====== ENV ====== */

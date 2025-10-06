@@ -36,15 +36,13 @@ export function FilterBar({
         onChange={(e) => set({ q: e.target.value })}
       />
 
-      {/* Forrás */}
       <select
         className="px-3 py-2 rounded bg-neutral-900 text-white"
         value={value.source || "sheets"}
         onChange={(e) =>
           set({
             source: (e.target.value as Filters["source"]) || "sheets",
-            // forrásváltáskor ne maradjon beragadó szűrő
-            store: undefined,
+            store: undefined, // ne ragadjon be
           })
         }
         title="Adatforrás"
@@ -54,7 +52,6 @@ export function FilterBar({
         <option value="aliexpress">AliExpress Top</option>
       </select>
 
-      {/* Raktár */}
       <select
         className="px-3 py-2 rounded bg-neutral-900 text-white"
         value={value.wh || ""}
@@ -71,13 +68,12 @@ export function FilterBar({
           ))}
       </select>
 
-      {/* Bolt */}
       <select
         className="px-3 py-2 rounded bg-neutral-900 text-white disabled:opacity-50"
         value={value.store || ""}
         onChange={(e) => set({ store: e.target.value || undefined })}
-        disabled={isBG || isALI} // live nézetekben nincs értelme
-        title={isBG || isALI ? "Live nézetben fix a bolt" : "Bolt szűrő"}
+        disabled={isBG || isALI}
+        title={isBG || isALI ? "Live nézetben fix bolt" : "Bolt szűrő"}
       >
         <option value="">Minden bolt</option>
         {m.stores.map((s) => (
@@ -87,7 +83,6 @@ export function FilterBar({
         ))}
       </select>
 
-      {/* Rendezés */}
       <select
         className="px-3 py-2 rounded bg-neutral-900 text-white"
         value={value.sort || ""}

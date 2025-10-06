@@ -11,13 +11,12 @@ export type Post = {
   excerpt: string;
 };
 
-// Vite: nyers szövegként kérjük az .md fájlokat
 const modules = import.meta.glob("./posts/**/*.md", { as: "raw", eager: true }) as Record<string, string>;
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
 function parseFrontmatter(raw: string): { data: Record<string, any>; content: string } {
-  const out: Record<string, any> = {};
+  const data: Record<string, any> = {};
   let content = raw;
 
   if (raw.startsWith("---")) {
@@ -31,28 +30,27 @@ function parseFrontmatter(raw: string): { data: Record<string, any>; content: st
         const key = m[1].trim();
         let val = m[2].trim();
         if (/^\[.*\]$/.test(val)) {
-          out[key] = val
+          data[key] = val
             .slice(1, -1)
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean);
         } else {
-          out[key] = val.replace(/^["']|["']$/g, "");
+          data[key] = val.replace(/^["']|["']$/g, "");
         }
       }
     }
   }
-  return { data: out, content };
+  return { data, content };
 }
 
-function slugFromPath(path: string) {
-  const m = path.match(/\/([^\/]+)\.md$/);
-  return m ? m[1] : path;
+function slugFromPath(p: string) {
+  const m = p.match(/\/([^\/]+)\.md$/);
+  return m ? m[1] : p;
 }
 
 export function loadAllPosts(): Post[] {
-  const list: Post[] = [];
-
+  const out: Post[] = [];
   for (const [path, raw] of Object.entries(modules)) {
     const { data, content } = parseFrontmatter(raw);
     const htmlUnsafe = md.render(content);
@@ -61,7 +59,7 @@ export function loadAllPosts(): Post[] {
     const plain = content.replace(/[#>*_`\[\]()\-!\n\r]+/g, " ").replace(/\s+/g, " ").trim();
     const excerpt = plain.slice(0, 160) + (plain.length > 160 ? "…" : "");
 
-    list.push({
+    out.push({
       slug: slugFromPath(path),
       title: data.title || "Cím nélkül",
       date: data.date ? new Date(String(data.date)).toISOString() : new Date().toISOString(),
@@ -69,20 +67,16 @@ export function loadAllPosts(): Post[] {
       tags: Array.isArray(data.tags)
         ? data.tags
         : data.tags
-        ? String(data.tags)
-            .split(",")
-            .map((s: string) => s.trim())
+        ? String(data.tags).split(",").map((s: string) => s.trim())
         : [],
       html,
       excerpt,
     });
   }
-
-  list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  return list;
+  out.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return out;
 }
 
 export function loadPost(slug: string): Post | null {
-  const all = loadAllPosts();
-  return all.find((p) => p.slug === slug) || null;
+  return loadAllPosts().find((p) => p.slug === slug) || null;
 }

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 
 type Deal = {
   id: string;
-  src: string;
+  src?: string;     // "sheets" | "banggood" | "aliexpress"
+  store?: string;   // "Banggood" | "Geekbuying" | "AliExpress" | …
   title: string;
   url: string;
   short?: string;
@@ -13,8 +14,28 @@ type Deal = {
   cur?: string;
   end?: string;
   image?: string;
-  store?: string; // Banggood | Geekbuying | AliExpress (ha nincs, url-ből következtetünk)
 };
+
+type Filters = {
+  q?: string;
+  wh?: string;
+  store?: string;
+  sort?: "price_asc" | "price_desc" | "store_asc" | "store_desc";
+  limit?: number;
+  source?: "sheets" | "banggood" | "aliexpress";
+  catalog?: "1";
+  minPrice?: number;
+  maxPrice?: number;
+};
+
+const FALLBACK_SVG =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='512' height='256' viewBox='0 0 512 256'>
+      <rect width='512' height='256' fill='#111827'/>
+      <text x='50%' y='52%' fill='#9ca3af' font-family='system-ui,Segoe UI,Roboto,Ubuntu,Arial' text-anchor='middle' font-size='16'>no image</text>
+    </svg>`
+  );
 
 function formatPrice(v?: number, cur?: string) {
   if (v == null) return "";
@@ -23,60 +44,42 @@ function formatPrice(v?: number, cur?: string) {
   return `${sym}${v.toFixed(2)}`;
 }
 
-// Beépített SVG fallback – nincs több 404
-const FALLBACK_SVG =
-  "data:image/svg+xml;utf8," +
-  encodeURIComponent(
-    `<svg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 512 512'>
-      <defs>
-        <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
-          <stop offset='0%' stop-color='#1f2937'/>
-          <stop offset='100%' stop-color='#111827'/>
-        </linearGradient>
-      </defs>
-      <rect width='512' height='512' fill='url(#g)'/>
-      <g fill='#9ca3af' font-family='system-ui,Segoe UI,Roboto,Ubuntu,Arial' text-anchor='middle'>
-        <text x='256' y='270' font-size='22'>no image</text>
-      </g>
-    </svg>`
-  );
-
-// kis helper: safe fetch JSON, hiba esetén üres items-szel tér vissza
-async function getItems(url: string): Promise<Deal[]> {
-  try {
-    const r = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
-    if (!r.ok) throw new Error(String(r.status));
-    const j = await r.json();
-    return Array.isArray(j?.items) ? j.items : [];
-  } catch {
-    return [];
-  }
-}
-
-// derive store név, ha nincs kitöltve
-function inferStore(d: Deal): string {
-  if (d.store) return d.store;
-  const u = d.url || "";
-  if (u.includes("banggood.")) return "Banggood";
-  if (u.includes("geekbuying.")) return "Geekbuying";
-  if (u.includes("aliexpress.")) return "AliExpress";
-  return "";
-}
-
-// dedupe (id || url+code) alapján
-function dedupe(items: Deal[]): Deal[] {
+function dedupe(list: Deal[]): Deal[] {
   const seen = new Set<string>();
   const out: Deal[] = [];
-  for (const d of items) {
-    const key = d.id || `${d.url || ""}::${d.code || ""}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(d);
+  for (const d of list) {
+    const key = `${d.id}::${d.url}::${d.code || ""}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(d);
+    }
   }
   return out;
 }
 
-export function DealsList({ filters }: { filters: any }) {
+function inferStore(d: Deal): string {
+  if (d.store) return d.store;
+  const u = (d.url || d.short || "").toLowerCase();
+  if (u.includes("banggood")) return "Banggood";
+  if (u.includes("geekbuying")) return "Geekbuying";
+  if (u.includes("aliexpress")) return "AliExpress";
+  return "Egyéb";
+}
+
+// segéd a fetch-hez
+async function getItems(url: string): Promise<Deal[]> {
+  const r = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
+  const j = await r.json();
+  return j.items || [];
+}
+
+export function DealsList({
+  filters,
+  onMeta,
+}: {
+  filters: Filters;
+  onMeta?: (m: { warehouses: string[]; stores: string[] }) => void;
+}) {
   const [items, setItems] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -87,49 +90,48 @@ export function DealsList({ filters }: { filters: any }) {
 
     const q = (filters.q || "").trim();
     const hasQuery = q.length > 0;
+    const lim = String(filters.limit ?? 200);
 
-    // ha van keresőszó → UNIFIED SEARCH: kérdezzük meg mindhárom forrást párhuzamosan
+    // ====== UNIFIED SEARCH, ha van keresőszó ======
     if (hasQuery) {
-      const lim = String(filters.limit ?? 200);
+      const couponsURL =
+        `/.netlify/functions/coupons?` +
+        new URLSearchParams({
+          q,
+          limit: lim,
+          wh: filters.wh || "",
+          // store szűrőt NEM adunk át itt – utólag szűrünk
+        }).toString();
 
-      // 1) Sheets aggregátor (Banggood + Geekbuying kuponok) – warehouse-szűrőt átadjuk
-      const couponsURL = `/.netlify/functions/coupons?` + new URLSearchParams({
-        q,
-        limit: lim,
-        wh: filters.wh || "",
-      }).toString();
+      const aliURL =
+        `/.netlify/functions/ali?` +
+        new URLSearchParams({
+          q,
+          limit: String(Math.min(Number(lim), 100)),
+        }).toString();
 
-      // 2) Ali keresés
-      const aliURL = `/.netlify/functions/ali?` + new URLSearchParams({
-        q,
-        limit: String(Math.min(Number(lim), 100)), // Ali max 50/oldal; itt bőven elég
-      }).toString();
-
-      // 3) Banggood “live” + katalógus fallback (ha nincs kupon)
-      const bgURL = `/.netlify/functions/bg?` + new URLSearchParams({
-        q,
-        limit: lim,
-        catalog: "1", // ha nincs kupon, tegyen be keresés-link kártyát
-      }).toString();
+      const bgURL =
+        `/.netlify/functions/bg?` +
+        new URLSearchParams({
+          q,
+          limit: lim,
+          catalog: "1", // ha nincs kupon, tegyen be keresés-link kártyát
+        }).toString();
 
       Promise.all([getItems(couponsURL), getItems(aliURL), getItems(bgURL)])
         .then(([a, b, c]) => {
           if (!alive) return;
           let merged = dedupe([...a, ...b, ...c]);
 
-          // utólagos store-szűrés (a “bolt” lenyíló alapján), de a lekérdezés mindig ALL
+          // utólagos store/wh/ár szűrő
           if (filters.store) {
             const want = String(filters.store).toLowerCase();
             merged = merged.filter((d) => inferStore(d).toLowerCase() === want);
           }
-
-          // warehouse szűrő: ha van wh, csak azokat, ahol egyezik (ha a dealen nincs wh mező, átengedjük)
           if (filters.wh) {
             const WH = String(filters.wh).toUpperCase();
             merged = merged.filter((d) => !d.wh || String(d.wh).toUpperCase() === WH);
           }
-
-          // ár szűrő (ha lenne min/max a UI-ban)
           if (filters.minPrice != null) {
             merged = merged.filter((d) => (d.price ?? Infinity) >= Number(filters.minPrice));
           }
@@ -150,7 +152,7 @@ export function DealsList({ filters }: { filters: any }) {
               return filters.sort === "store_asc" ? cmp : -cmp;
             });
           } else {
-            // "okos" alap: EU raktár előny, közelebbi lejárat, nagyobb kedvezmény
+            // okos alap
             merged.sort((a, b) => {
               let sa = 0, sb = 0;
               const wA = (a.wh || "").toUpperCase();
@@ -175,34 +177,112 @@ export function DealsList({ filters }: { filters: any }) {
             });
           }
 
+          // meta
+          const warehouses = Array.from(
+            new Set(merged.map((d) => (d.wh || "").trim()).filter(Boolean))
+          ).sort((a, b) => a.localeCompare(b));
+          const stores = Array.from(new Set(merged.map(inferStore))).sort((a, b) =>
+            a.localeCompare(b)
+          );
+
+          onMeta?.({ warehouses, stores });
           setItems(merged);
           setLoading(false);
         })
         .catch(() => setLoading(false));
 
-      return () => { alive = false; };
+      return () => {
+        alive = false;
+      };
     }
 
-    // NINCS keresőszó → a régi logika: aggregátor / Ali TOP a főoldali komponensben
-    const qs = new URLSearchParams(
-      Object.entries({
-        wh: filters.wh || undefined,
-        store: filters.store || undefined,
-        sort: filters.sort || undefined,
-        limit: filters.limit ?? 200,
-      }).filter(([, v]) => v !== undefined) as any
-    ).toString();
+    // ====== NINCS keresőszó → forrás alapján töltünk ======
+    const source = filters.source || "sheets";
 
-    fetch(`/.netlify/functions/coupons?${qs}`, { headers: { "Cache-Control": "no-cache" } })
-      .then((r) => r.json())
-      .then((d) => {
+    let url = "";
+    if (source === "sheets") {
+      url =
+        `/.netlify/functions/coupons?` +
+        new URLSearchParams(
+          Object.entries({
+            wh: filters.wh || undefined,
+            store: filters.store || undefined,
+            sort: filters.sort || undefined,
+            limit: filters.limit ?? 200,
+          }).filter(([, v]) => v !== undefined) as any
+        ).toString();
+    } else if (source === "banggood") {
+      url =
+        `/.netlify/functions/bg?` +
+        new URLSearchParams({
+          limit: String(filters.limit ?? 200),
+        }).toString();
+    } else {
+      // aliexpress
+      url =
+        `/.netlify/functions/ali?` +
+        new URLSearchParams({
+          top: "1",
+          limit: String(Math.min(Number(filters.limit ?? 200), 200)),
+        }).toString();
+    }
+
+    getItems(url)
+      .then((list) => {
         if (!alive) return;
-        setItems(d.items || []);
+
+        // utólagos szűrés (wh/store/min/max/sort)
+        let merged = list.slice();
+
+        if (filters.store) {
+          const want = String(filters.store).toLowerCase();
+          merged = merged.filter((d) => inferStore(d).toLowerCase() === want);
+        }
+        if (filters.wh) {
+          const WH = String(filters.wh).toUpperCase();
+          merged = merged.filter((d) => !d.wh || String(d.wh).toUpperCase() === WH);
+        }
+        if (filters.minPrice != null) {
+          merged = merged.filter((d) => (d.price ?? Infinity) >= Number(filters.minPrice));
+        }
+        if (filters.maxPrice != null) {
+          merged = merged.filter((d) => (d.price ?? 0) <= Number(filters.maxPrice));
+        }
+
+        if (filters.sort === "price_asc") {
+          merged.sort((x, y) => (x.price ?? Infinity) - (y.price ?? Infinity));
+        } else if (filters.sort === "price_desc") {
+          merged.sort((x, y) => (y.price ?? -Infinity) - (x.price ?? -Infinity));
+        } else if (filters.sort === "store_asc" || filters.sort === "store_desc") {
+          merged.sort((x, y) => {
+            const ax = inferStore(x).toLowerCase();
+            const ay = inferStore(y).toLowerCase();
+            const cmp = ax.localeCompare(ay);
+            return filters.sort === "store_asc" ? cmp : -cmp;
+          });
+        }
+
+        // meta frissítés
+        const warehouses = Array.from(
+          new Set(merged.map((d) => (d.wh || "").trim()).filter(Boolean))
+        ).sort((a, b) => a.localeCompare(b));
+
+        const stores =
+          source === "banggood"
+            ? ["Banggood"]
+            : source === "aliexpress"
+            ? ["AliExpress"]
+            : Array.from(new Set(merged.map(inferStore))).sort((a, b) => a.localeCompare(b));
+
+        onMeta?.({ warehouses, stores });
+        setItems(merged);
         setLoading(false);
       })
       .catch(() => setLoading(false));
 
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [JSON.stringify(filters)]);
 
   async function copyCode(e: React.MouseEvent, deal: Deal) {
@@ -229,20 +309,18 @@ export function DealsList({ filters }: { filters: any }) {
       </div>
     );
   }
-
   if (!items.length) return <div className="p-4 text-neutral-400">Nincs találat.</div>;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-3">
       {items.map((d) => {
-        const store = inferStore(d);
         const out = d.short || d.url;
         const go =
           `/.netlify/functions/go?u=${encodeURIComponent(out)}` +
-          `&src=${encodeURIComponent(store || d.src || "")}` +
+          `&src=${encodeURIComponent(d.src || inferStore(d))}` +
           `&code=${encodeURIComponent(d.code || "")}`;
 
-        const imgSrc = d.image
+        const img = d.image
           ? `/.netlify/functions/img?u=${encodeURIComponent(d.image)}`
           : FALLBACK_SVG;
 
@@ -260,17 +338,15 @@ export function DealsList({ filters }: { filters: any }) {
           >
             <div className="relative w-full h-40 mb-2">
               <img
-                src={imgSrc}
+                src={img}
                 alt={d.title}
                 className="absolute inset-0 w-full h-full object-cover rounded-md bg-neutral-800"
                 loading="lazy"
                 decoding="async"
-                draggable={false}
-                sizes="(min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
                 onError={(e) => {
-                  const img = e.currentTarget as HTMLImageElement;
-                  img.onerror = null;
-                  img.src = FALLBACK_SVG;
+                  const el = e.currentTarget as HTMLImageElement;
+                  el.onerror = null;
+                  el.src = FALLBACK_SVG;
                 }}
               />
             </div>
@@ -283,7 +359,7 @@ export function DealsList({ filters }: { filters: any }) {
             </div>
 
             <div className="text-xs text-neutral-500 mt-1">
-              {store || "—"} {d.wh ? `• ${d.wh}` : ""} {ends ? `• ${ends}` : ""}
+              {(d.store || inferStore(d))} {d.wh ? `• ${d.wh}` : ""} {ends ? `• ${ends}` : ""}
             </div>
 
             {d.code ? (
@@ -301,9 +377,7 @@ export function DealsList({ filters }: { filters: any }) {
                 </button>
               </div>
             ) : (
-              <div className="mt-3 text-xs text-neutral-400">
-                {store === "AliExpress" ? "TOP / keresési találat – kupon nélkül" : "Nincs kuponkód – akciós ár"}
-              </div>
+              <div className="mt-3 text-xs text-neutral-400">Nincs kuponkód – akciós ár</div>
             )}
           </a>
         );

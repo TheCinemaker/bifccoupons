@@ -20,12 +20,12 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const qs = new URLSearchParams(event.queryStringParameters || {});
+        const qs = new URLSearchParams((event.queryStringParameters || {}) as Record<string, string>);
         const q = (qs.get("q") || "").trim();
         const wantTop = ["1", "true", "yes"].includes((qs.get("top") || "").toLowerCase());
-        
-        const searchLimit = 30;
-        const topLimit = 100;
+
+        // AliExpress affiliate API page_size cap: 50 for search, 100 for hotproduct
+        const reqLimit = Math.max(1, parseInt(qs.get("limit") || "30", 10));
 
         let method = '';
         let apiParams: Record<string, any> = {
@@ -37,10 +37,10 @@ export const handler: Handler = async (event) => {
         if (q) {
             method = "aliexpress.affiliate.product.query";
             apiParams.keywords = q;
-            apiParams.page_size = searchLimit;
+            apiParams.page_size = Math.min(reqLimit, 50);
         } else if (wantTop) {
-            method = "aliexpress.affiliate.hotproduct.query"; // Visszatettem a hotproductot, mert most már tudjuk, hogy működik
-            apiParams.page_size = topLimit;
+            method = "aliexpress.affiliate.hotproduct.query";
+            apiParams.page_size = Math.min(reqLimit, 100);
         }
 
         if (!method) {

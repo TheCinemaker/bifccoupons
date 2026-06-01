@@ -1,0 +1,9 @@
+node_modules
+
+# Local Netlify folder
+.netlify
+deno.lock
+
+# Local env (never commit)
+.env
+.env.local

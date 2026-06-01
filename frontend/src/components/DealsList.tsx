@@ -35,6 +35,7 @@ const FALLBACK_SVG =
 export function DealsList({ filters }: { filters: any }) {
   const [items, setItems] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const fetchIdRef = useRef(0);
 
@@ -43,128 +44,28 @@ export function DealsList({ filters }: { filters: any }) {
       const run = async () => {
         const id = ++fetchIdRef.current;
         setLoading(true);
+        setError(null);
         try {
-          const q = (filters.q || "").trim();
-          let final: Deal[] = [];
+          const params = new URLSearchParams();
+          if (filters.q) params.set("q", String(filters.q).trim());
+          if (filters.wh) params.set("wh", String(filters.wh));
+          if (filters.store) params.set("store", String(filters.store));
+          if (filters.sort) params.set("sort", String(filters.sort));
+          params.set("limit", String(filters.limit ?? 120));
 
-          // ---------- KERESÉS: minden forrást párhuzamosan, célzott QS-sel ----------
-          if (q) {
-            const lim = String(filters.limit ?? 200);
-
-            // Sheets aggregátor (NE adjuk át a store-t itt!)
-            const couponsURL =
-              "/.netlify/functions/coupons?" +
-              new URLSearchParams({
-                q,
-                limit: lim,
-                wh: filters.wh || "",
-              }).toString();
-
-            // Ali keresés
-            const aliURL =
-              "/.netlify/functions/ali?" +
-              new URLSearchParams({
-                q,
-                limit: String(Math.min(Number(lim), 100)),
-              }).toString();
-
-            // Banggood live + katalógus fallback
-            const bgURL =
-              "/.netlify/functions/bg?" +
-              new URLSearchParams({
-                q,
-                limit: lim,
-                catalog: "1",
-              }).toString();
-
-            const [a, b, c] = await Promise.all(
-              [couponsURL, aliURL, bgURL].map((u) =>
-                fetch(u)
-                  .then((r) => (r.ok ? r.json() : { items: [] }))
-                  .catch(() => ({ items: [] }))
-              )
-            );
-            if (id !== fetchIdRef.current) return;
-            final = [...(a.items || []), ...(b.items || []), ...(c.items || [])];
-          }
-          // ---------- BOLT nézet ----------
-          else if (filters.store) {
-            let url = "";
-            if (filters.store === "AliExpress") {
-              url = "/.netlify/functions/ali?top=1&limit=200";
-            } else {
-              url =
-                "/.netlify/functions/coupons?" +
-                new URLSearchParams({
-                  store: String(filters.store),
-                  limit: "200",
-                  wh: filters.wh || "",
-                }).toString();
-            }
-            const res = await fetch(url).then((r) => r.json());
-            if (id !== fetchIdRef.current) return;
-            final = res.items || [];
-          }
-          // ---------- KEZDŐLAP ----------
-          else {
-            const urls = [
-              "/.netlify/functions/coupons?store=Banggood&limit=6",
-              "/.netlify/functions/coupons?store=Geekbuying&limit=6",
-              "/.netlify/functions/ali?top=1&limit=6",
-              "/.netlify/functions/bg?top=1&limit=6",
-            ];
-            const results = await Promise.all(
-              urls.map((u) =>
-                fetch(u)
-                  .then((r) => (r.ok ? r.json() : { items: [] }))
-                  .catch(() => ({ items: [] }))
-              )
-            );
-            if (id !== fetchIdRef.current) return;
-            final = results.flatMap((x) => x.items || []);
-          }
-
-          // utólagos store/wh/ár szűrők (ha vannak)
-          if (filters.store) {
-            final = final.filter(
-              (d) => (d.store || d.src || "").toLowerCase() === String(filters.store).toLowerCase()
-            );
-          }
-          if (filters.wh) {
-            const WH = String(filters.wh).toUpperCase();
-            final = final.filter((d) => !d.wh || String(d.wh).toUpperCase() === WH);
-          }
-          if (filters.minPrice != null) {
-            final = final.filter((d) => (d.price ?? Infinity) >= Number(filters.minPrice));
-          }
-          if (filters.maxPrice != null) {
-            final = final.filter((d) => (d.price ?? 0) <= Number(filters.maxPrice));
-          }
-
-          // dedupe
-          const seen = new Set<string>();
-          const uniq: Deal[] = [];
-          for (const d of final) {
-            const key = `${d.url}|${d.code || ""}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              uniq.push(d);
-            }
-          }
-
-          // rendezés
-          if (filters.sort === "price_asc") {
-            uniq.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
-          } else if (filters.sort === "price_desc") {
-            uniq.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
-          }
-
-          setItems(uniq);
-        } catch (e) {
-          console.error("[DealsList] error:", e);
+          const url = `/.netlify/functions/search?${params.toString()}`;
+          const r = await fetch(url);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const data = await r.json();
+          if (id !== fetchIdRef.current) return;
+          setItems(data.items || []);
+        } catch (e: any) {
+          if (id !== fetchIdRef.current) return;
+          console.error("[DealsList] fetch error:", e);
+          setError(e?.message || "Ismeretlen hiba");
           setItems([]);
         } finally {
-          setLoading(false);
+          if (id === fetchIdRef.current) setLoading(false);
         }
       };
       run();
@@ -194,6 +95,16 @@ export function DealsList({ filters }: { filters: any }) {
             <div className="h-3 w-1/3 bg-neutral-800 rounded animate-pulse" />
           </div>
         ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-center">
+        <h3 className="text-lg font-semibold text-red-300 mb-2">Hiba a betöltéskor</h3>
+        <p className="text-neutral-400 text-sm">{error}</p>
+        <p className="text-neutral-500 text-xs mt-2">Próbáld újratölteni az oldalt, vagy szűkíts a keresésen.</p>
       </div>
     );
   }

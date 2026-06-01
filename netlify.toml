@@ -1,6 +1,13 @@
 [build]
-  command = "npm --prefix frontend ci || npm --prefix frontend i && npm --prefix frontend run build"
+  command = "(npm --prefix frontend ci || npm --prefix frontend i) && npm --prefix frontend run build"
   publish = "frontend/dist"
+
+[dev]
+  port = 3004
+  targetPort = 5173
+  framework = "vite"
+  command = "npm --prefix frontend run dev"
+  publish = "frontend"
 
 [functions]
   node_bundler = "esbuild"

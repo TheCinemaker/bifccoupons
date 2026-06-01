@@ -104,7 +104,7 @@ let LAST_ETAG  = "";
 
 export const handler: Handler = async (event) => {
   try {
-    const qs = new URLSearchParams(event.queryStringParameters || {});
+    const qs = new URLSearchParams((event.queryStringParameters || {}) as Record<string, string>);
     const ifNoneMatch = event.headers["if-none-match"];
 
     const q       = (qs.get("q") || "").trim();

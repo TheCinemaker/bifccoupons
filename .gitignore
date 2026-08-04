@@ -1,0 +1,8 @@
+node_modules/
+.vscode/
+.idea/
+*.log
+.env
+credentials.json
+backend/config/credentials.json
+config/credentials.json

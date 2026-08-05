@@ -43,15 +43,6 @@ async function fetchLiveGoogleSheet(sheetName) {
   if (!json.table || !json.table.rows) return [];
 
   const cols = json.table.cols || [];
-  const findColIndex = (keyWords, defaultIdx) => {
-    const idx = cols.findIndex(col => {
-      if (!col || !col.label) return false;
-      const label = col.label.toLowerCase().trim();
-      return keyWords.some(kw => label.includes(kw));
-    });
-    return idx !== -1 ? idx : defaultIdx;
-  };
-
   const is9ColSchema = sheetName === 'BANGGOODAPI' || sheetName === 'ALIEXPRESSAPI' || cols.length === 9;
 
   const imgIdx = 0;

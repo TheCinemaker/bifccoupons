@@ -109,17 +109,18 @@ function escapeHtml(str) {
 
 function sendTelegramMessage(item) {
   return new Promise((resolve, reject) => {
+    const codeText = item.code ? `<code>${escapeHtml(item.code)}</code> <i>(koppintásra másolható)</i>` : "<i>Automatikus kedvezmény</i>";
     const caption = `<b>KINABOLVEDDMEG AKCIÓ</b>\n\n` +
                     `<b>Termék:</b> ${escapeHtml(item.name)}\n` +
                     `<b>Akciós Ár:</b> ${escapeHtml(item.price)}\n` +
-                    `<b>Kuponkód:</b> ${item.code ? `<code>${escapeHtml(item.code)}</code>` : "Automatikus kedvezmény"}\n` +
+                    `<b>Kuponkód:</b> ${codeText}\n` +
                     `<b>Raktár:</b> ${escapeHtml(item.warehouse || "EU Raktár")}\n` +
-                    `<b>Bolt:</b> ${escapeHtml(item.source)}\n\n` +
-                    `Vásárlási link a lenti gombra kattintva!`;
+                    `<b>Bolt:</b> ${escapeHtml(item.source)}`;
 
     const replyMarkup = {
       inline_keyboard: [
-        [{ text: "Vásárlás / Megnézem", url: item.link }]
+        [{ text: "Vásárlás / Irány a Bolt", url: item.link }],
+        [{ text: "KINABOLVEDDMEG Összes Kupon", url: "https://bifccoupons.netlify.app" }]
       ]
     };
 

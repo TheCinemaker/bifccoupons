@@ -134,7 +134,10 @@ function sendTelegramPost(item) {
   const replyMarkup = {
     inline_keyboard: [
       [
-        { text: "Vásárlás / Megnézem", url: item.link }
+        { text: "Vásárlás / Irány a Bolt", url: item.link }
+      ],
+      [
+        { text: "KINABOLVEDDMEG Összes Kupon", url: "https://bifccoupons.netlify.app" }
       ]
     ]
   };
@@ -183,7 +186,7 @@ function sendTelegramPost(item) {
 
 function buildPostCaption(item) {
   const nameEscaped = escapeHtml(item.name);
-  const codeText = item.code ? `<code>${escapeHtml(item.code)}</code>` : "Automatikus kedvezmény";
+  const codeText = item.code ? `<code>${escapeHtml(item.code)}</code> <i>(koppintásra másolható)</i>` : "<i>Automatikus kedvezmény</i>";
   const warehouseText = item.warehouse ? escapeHtml(item.warehouse) : "EU Raktár";
 
   return `<b>KINABOLVEDDMEG AKCIÓ</b>\n\n` +
@@ -191,8 +194,7 @@ function buildPostCaption(item) {
          `<b>Akciós Ár:</b> ${escapeHtml(item.price)}\n` +
          `<b>Kuponkód:</b> ${codeText}\n` +
          `<b>Raktár:</b> ${warehouseText}\n` +
-         `<b>Bolt:</b> ${escapeHtml(item.source)}\n\n` +
-         `Vásárlási link a gombra kattintva érhető el!`;
+         `<b>Bolt:</b> ${escapeHtml(item.source)}`;
 }
 
 /***** ========== ÁR FORMÁZÓ SEGÉDFÜGGVÉNY ========== *****/

@@ -1,10 +1,55 @@
 import React, { useState, useEffect } from 'react';
 
-const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, setSearchTerm, onSendToStudio }) => {
+const formatDisplayPrice = (rawPrice) => {
+  if (!rawPrice) return 'Lásd a linken';
+  let str = String(rawPrice).trim();
+
+  // Ha a nyers szövegben benne van az EUR, USD vagy $ érmenév, töröljük a mögé keveredett Ft-ot!
+  if (/EUR|\$|USD|€|GBP|£/i.test(str)) {
+    str = str.replace(/Ft/gi, '').trim();
+    return str;
+  }
+
+  // Ha a szövegben már szerepel a Ft szó, hagyjuk úgy
+  if (/Ft/i.test(str)) {
+    return str;
+  }
+
+  // Ha tisztán szám, mögé tesszük a Ft-ot
+  return `${str} Ft`;
+};
+
+const formatDisplayDate = (rawDate) => {
+  if (!rawDate) return '';
+  let str = String(rawDate).trim();
+
+  // Ha a ronda Google Sheets Date(2026,8,30) formátumban van, alakítsuk tisztává
+  if (str.includes('Date(')) {
+    const match = str.match(/Date\((\d+),(\d+),(\d+)\)/);
+    if (match) {
+      const year = match[1];
+      const month = String(parseInt(match[2], 10) + 1).padStart(2, '0');
+      const day = String(match[3]).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    return '';
+  }
+
+  return str;
+};
+
+const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, setSearchTerm, onSendToStudio, isAdmin }) => {
   const [copiedCode, setCopiedCode] = useState(null);
   const [visibleCount, setVisibleCount] = useState(36);
 
-  const sheets = ['Összes', 'BG Unique', 'BG Unique HUN', 'BANGGOODAPI', 'ALIEXPRESSAPI', 'Geekbuying', 'Geekbuying Unique'];
+  const STORE_TABS = [
+    { label: 'Összes', key: 'Összes' },
+    { label: 'BANGGOOD', keys: ['BANGGOODAPI', 'BG ALL Coupons', 'Banggood'] },
+    { label: 'BANGGOOD UNIQUE', keys: ['BG Unique', 'BG Unique HUN'] },
+    { label: 'ALIEXPRESS', keys: ['ALIEXPRESSAPI', 'AliExpress ALL', 'AliExpress'] },
+    { label: 'GEEKBUYING', keys: ['Geekbuying'] },
+    { label: 'GEEKBUYING UNIQUE', keys: ['Geekbuying Unique'] }
+  ];
 
   useEffect(() => {
     setVisibleCount(36);
@@ -28,8 +73,12 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
         (coupon.warehouse && coupon.warehouse.toLowerCase().includes(searchTerm.toLowerCase()))
       : true;
 
-    const matchesSheet = activeSheet === 'Összes' ? true : coupon.source === activeSheet;
+    if (activeSheet === 'Összes') return matchesSearch;
 
+    const selectedTabConfig = STORE_TABS.find(tab => tab.label === activeSheet);
+    if (!selectedTabConfig) return matchesSearch;
+
+    const matchesSheet = selectedTabConfig.keys.includes(coupon.source);
     return matchesSearch && matchesSheet;
   });
 
@@ -44,7 +93,7 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
             placeholder="Keresés terméknévre, kuponkódra vagy raktárra..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="search-input"
+            className="search-input mac-input"
           />
           {searchTerm && (
             <span className="clear-icon" onClick={handleClearSearch}>
@@ -53,14 +102,14 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
           )}
         </div>
 
-        <div className="tabs">
-          {sheets.map(sheet => (
+        <div className="tabs-container">
+          {STORE_TABS.map(tab => (
             <button
-              key={sheet}
-              className={`tab ${sheet === activeSheet ? 'active' : ''}`}
-              onClick={() => setActiveSheet(sheet)}
+              key={tab.label}
+              className={`tab-pill ${tab.label === activeSheet ? 'active' : ''}`}
+              onClick={() => setActiveSheet(tab.label)}
             >
-              {sheet}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -77,6 +126,9 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
             const secureImageUrl = coupon.image
               ? coupon.image.replace('http://', 'https://')
               : 'https://images.unsplash.com/photo-1585515320310-259814833e62?auto=format&fit=crop&w=400&q=80';
+
+            const cleanPrice = formatDisplayPrice(coupon.price);
+            const cleanDate = formatDisplayDate(coupon.endTime);
 
             return (
               <div key={index} className="coupon-card">
@@ -105,12 +157,12 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
                     </p>
                     <p className="detail-row">
                       <span className="detail-label">Akciós Ár:</span>
-                      <span className="detail-price">{coupon.price ? `${coupon.price} Ft` : 'Lásd a linken'}</span>
+                      <span className="detail-price">{cleanPrice}</span>
                     </p>
-                    {coupon.endTime && (
+                    {cleanDate && (
                       <p className="detail-row text-muted">
                         <span className="detail-label">Lejárat:</span>
-                        <span>{coupon.endTime}</span>
+                        <span>{cleanDate}</span>
                       </p>
                     )}
                   </div>
@@ -131,16 +183,18 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
                       onClick={() => handleCopyCode(coupon.code)} 
                       className={`btn-card btn-copy ${copiedCode === coupon.code ? 'copied' : ''}`}
                     >
-                      {copiedCode === coupon.code ? '[OK] Másolva!' : 'Kupon másolása'}
+                      {copiedCode === coupon.code ? 'Másolva!' : 'Kupon másolása'}
                     </button>
 
-                    <button 
-                      onClick={() => onSendToStudio(coupon)} 
-                      className="btn-card btn-studio"
-                      title="Küldés a Deal Studio generátorba poszt és kép készítéséhez"
-                    >
-                      Deal Studio
-                    </button>
+                    {isAdmin && (
+                      <button 
+                        onClick={() => onSendToStudio(coupon)} 
+                        className="btn-card btn-studio"
+                        title="Küldés a Deal Studio generátorba poszt készítéséhez"
+                      >
+                        Deal Studio
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -154,11 +208,11 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
       </div>
 
       {visibleCount < filteredCoupons.length && (
-        <div style={{ textAlign: 'center', marginTop: '2rem' }}>
+        <div style={{ textAlign: 'center', marginTop: '2.5rem' }}>
           <button 
-            className="btn-action btn-secondary" 
+            className="btn-mac btn-mac-secondary" 
             onClick={() => setVisibleCount(prev => prev + 48)}
-            style={{ padding: '0.85rem 2rem' }}
+            style={{ padding: '0.85rem 2.5rem' }}
           >
             További kuponok betöltése ({filteredCoupons.length - visibleCount} maradt)
           </button>

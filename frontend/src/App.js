@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import './Coupons.css';
 import CouponGrid from './components/CouponGrid';
 import DealStudio from './components/DealStudio';
+import ReviewsPage from './components/ReviewsPage';
+import AdminModal from './components/AdminModal';
 
 const DarkModeToggle = () => {
   const [darkMode, setDarkMode] = useState(true);
@@ -22,8 +24,8 @@ const DarkModeToggle = () => {
   }, []);
 
   return (
-    <button onClick={toggleDarkMode} className="dark-mode-toggle">
-      {darkMode ? 'Light Mode' : 'Dark Mode'}
+    <button onClick={toggleDarkMode} className="btn-mac btn-mac-secondary dark-toggle-btn">
+      {darkMode ? 'Világos mód' : 'Sötét mód'}
     </button>
   );
 };
@@ -97,6 +99,9 @@ function App() {
   const [selectedDealForStudio, setSelectedDealForStudio] = useState(null);
   const [apiStatus, setApiStatus] = useState({ loading: true, error: null });
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+
   useEffect(() => {
     let isMounted = true;
     
@@ -104,7 +109,6 @@ function App() {
       try {
         setApiStatus({ loading: true, error: null });
 
-        // Párhuzamos lekérés az összes lapra a maximális sebességért
         const sheetPromises = SHEET_NAMES.map(name => fetchLiveGoogleSheet(name));
         const results = await Promise.allSettled(sheetPromises);
 
@@ -117,7 +121,6 @@ function App() {
 
         if (isMounted) {
           if (allLiveCoupons.length > 0) {
-            console.log('Összesen betöltött élő kuponok száma (párhuzamos beolvasással):', allLiveCoupons.length);
             setCoupons(allLiveCoupons);
             setApiStatus({ loading: false, error: null });
           } else {
@@ -143,14 +146,30 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleAdminClick = () => {
+    if (isAdmin) {
+      setIsAdmin(false);
+      if (activeTab === 'studio' || activeTab === 'feeds') {
+        setActiveTab('coupons');
+      }
+    } else {
+      setIsAdminModalOpen(true);
+    }
+  };
+
+  const handleAdminSuccess = () => {
+    setIsAdmin(true);
+    setIsAdminModalOpen(false);
+  };
+
   return (
     <div className="app-container">
       <header className="main-header">
         <div className="logo-brand">
-          <div className="logo-badge">BIFC</div>
+          <div className="logo-badge">KINABOLVEDDMEG</div>
           <div>
-            <h1 className="brand-title">KÍNÁBÓL VEDD MEG</h1>
-            <p className="brand-subtitle">BUYITFROMCHINA - KUPONKERESŐ & DEAL STUDIO</p>
+            <h1 className="brand-title">KINABOLVEDDMEG</h1>
+            <p className="brand-subtitle">BUYITFROMCHINA - PREMIUMLISZTÁLT KUPONOK ÉS AKCIÓK</p>
           </div>
         </div>
 
@@ -159,19 +178,38 @@ function App() {
             className={`nav-tab ${activeTab === 'coupons' ? 'active' : ''}`}
             onClick={() => setActiveTab('coupons')}
           >
-            Kuponkereső ({coupons.length})
+            Kínálat ({coupons.length})
           </button>
+          
           <button 
-            className={`nav-tab ${activeTab === 'studio' ? 'active' : ''}`}
-            onClick={() => setActiveTab('studio')}
+            className={`nav-tab ${activeTab === 'reviews' ? 'active' : ''}`}
+            onClick={() => setActiveTab('reviews')}
           >
-            Deal Studio & Autoposzt
+            Tesztek & Unboxing
           </button>
+
+          {isAdmin && (
+            <>
+              <button 
+                className={`nav-tab admin-tab ${activeTab === 'studio' ? 'active' : ''}`}
+                onClick={() => setActiveTab('studio')}
+              >
+                Deal Studio
+              </button>
+              <button 
+                className={`nav-tab admin-tab ${activeTab === 'feeds' ? 'active' : ''}`}
+                onClick={() => setActiveTab('feeds')}
+              >
+                Live Feeds
+              </button>
+            </>
+          )}
+
           <button 
-            className={`nav-tab ${activeTab === 'feeds' ? 'active' : ''}`}
-            onClick={() => setActiveTab('feeds')}
+            className={`nav-tab lock-tab ${isAdmin ? 'logged-in' : ''}`}
+            onClick={handleAdminClick}
           >
-            Live Feeds
+            {isAdmin ? 'Admin (Kijelentkezés)' : 'Admin Belépés'}
           </button>
         </nav>
 
@@ -180,7 +218,7 @@ function App() {
 
       {apiStatus.loading && (
         <div className="status-banner info">
-          <span>Élő kuponok töltése a Google Sheets táblázatból (ID: 1qw3IXBpWl...)...</span>
+          <span>Élő kuponok betöltése a táblázatból...</span>
         </div>
       )}
 
@@ -199,52 +237,39 @@ function App() {
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
             onSendToStudio={handleSendToStudio}
+            isAdmin={isAdmin}
           />
         )}
 
-        {activeTab === 'studio' && (
-          <DealStudio 
-            initialDeal={selectedDealForStudio || (coupons.length > 0 ? coupons[0] : null)}
-            availableCoupons={coupons}
-            onSelectDeal={(deal) => setSelectedDealForStudio(deal)}
-          />
+        {activeTab === 'reviews' && (
+          <ReviewsPage isAdmin={isAdmin} />
         )}
 
-        {activeTab === 'feeds' && (
-          <div className="feeds-container panel">
-            <h2>Live Adatforrások & Google Sheets Státusz</h2>
-            <p className="text-muted">A kuponok közvetlenül a Google Sheets táblázatodból olvasódnak be élőben.</p>
-            
-            <div className="feeds-grid">
-              <div className="feed-card">
-                <h3>Google Sheets Élő Szinkron</h3>
-                <p><strong>Spreadsheet ID:</strong> <code>1qw3IXBpWlRx-ZFSueFaiPfA44lpMd1b5-MhnSIRwzMc</code></p>
-                <p><strong>Beolvasott Laptáblák:</strong></p>
-                <ul>
-                  <li>BG Unique</li>
-                  <li>BG Unique HUN</li>
-                  <li>BG ALL Coupons</li>
-                  <li>Geekbuying</li>
-                  <li>Geekbuying Unique</li>
-                </ul>
-                <p style={{marginTop: '0.5rem'}}><strong>Összes beolvasott élő kupon:</strong> {coupons.length} db</p>
-                <span className="badge-status online">[OK] Élő Adatfolyam Csatlakoztatva</span>
-              </div>
+        {isAdmin && activeTab === 'studio' && (
+          <DealStudio selectedCoupon={selectedDealForStudio} />
+        )}
 
-              <div className="feed-card">
-                <h3>Banggood Affiliate API</h3>
-                <p><strong>API kódok:</strong> Netlify & Backend szinkronizált</p>
-                <p><strong>Frissítés:</strong> Google Sheets automatikus szinkronizáció</p>
-                <span className="badge-status online">[OK] Csatlakoztatva</span>
-              </div>
+        {isAdmin && activeTab === 'feeds' && (
+          <div className="feeds-section mac-card">
+            <h3>ÉLŐ ADATCSATORNÁK ÉS ÁLLAPOT</h3>
+            <p>Google Sheets Táblázat ID: <code>{SPREADSHEET_ID}</code></p>
+            <div className="feeds-list">
+              {SHEET_NAMES.map(name => (
+                <div key={name} className="feed-item">
+                  <span className="feed-name">{name}</span>
+                  <span className="feed-status active">Aktív Szinkron</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
       </main>
 
-      <footer className="main-footer">
-        <p>© 2026 KÍNÁBÓL VEDD MEG - BUYITFROMCHINA OFFICIAL | FB Csoport & Telegram Újjáélesztő Rendszer</p>
-      </footer>
+      <AdminModal 
+        isOpen={isAdminModalOpen}
+        onClose={() => setIsAdminModalOpen(false)}
+        onSuccess={handleAdminSuccess}
+      />
     </div>
   );
 }

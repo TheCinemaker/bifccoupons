@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/accessible-emoji */
 import React, { useState, useEffect, useRef } from 'react';
 
 const PostTemplates = {

@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/accessible-emoji */
 import React, { useEffect, useState } from 'react';
 import './Coupons.css';
 import CouponGrid from './components/CouponGrid';

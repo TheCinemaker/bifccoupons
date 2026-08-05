@@ -180,14 +180,17 @@ async function run() {
   console.log("KINABOLVEDDMEG Telegram Bot indítása...");
   const cache = loadPostedCache();
   let postedCount = 0;
+  const MAX_POSTS_PER_SHEET = 1;
 
   for (const sheetName of SHEET_NAMES) {
     if (postedCount >= MAX_POSTS_PER_RUN) break;
+    let sheetPosted = 0;
 
     try {
       const items = await fetchSheetData(sheetName);
       for (const item of items) {
         if (postedCount >= MAX_POSTS_PER_RUN) break;
+        if (sheetPosted >= MAX_POSTS_PER_SHEET) break;
 
         const dealId = `${item.link}|${item.code || ''}`;
         if (cache[dealId]) continue; // Már posztolva
@@ -197,6 +200,7 @@ async function run() {
         if (ok) {
           cache[dealId] = new Date().toISOString();
           postedCount++;
+          sheetPosted++;
           savePostedCache(cache);
           await new Promise(r => setTimeout(r, SLEEP_MS));
         }

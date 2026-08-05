@@ -6,21 +6,22 @@ var TELEGRAM_BOT_TOKEN = "6082362477:AAFOKlAuwIeziUT-aj2sj5kbvGErJjUsrEA";
 var TELEGRAM_CHAT_ID   = "-1001268818190";
 var SPREADSHEET_ID     = "1qw3IXBpWlRx-ZFSueFaiPfA44lpMd1b5-MhnSIRwzMc";
 
-// Összes aktív Google Sheet lap neve
+// Összes aktív Google Sheet lap neve (AliExpress előre véve a változatosságért)
 var SHEET_NAMES = [
-  "BG Unique",
-  "BG Unique HUN",
-  "BANGGOODAPI",
   "ALIEXPRESSAPI",
+  "BG Unique",
+  "Geekbuying Unique",
+  "BANGGOODAPI",
   "Geekbuying",
-  "Geekbuying Unique"
+  "BG Unique HUN"
 ];
 
 /***** ========== BEÁLLÍTÁSOK ========== *****/
-var COOLDOWN_DAYS        = 5;     // Hány napig ne posztolja újra ugyanazt a terméket
-var MAX_ROWS_PER_SHEET   = 100;   // Lapcsoportonkénti maximális vizsgálati sorok
-var SLEEP_BETWEEN_POSTMS = 5000;  // 5 másodperc anti-spam szünet a posztok között
-var MAX_POSTS_PER_RUN    = 5;     // Egy futáskor maximálisan kiküldhető posztok száma
+var COOLDOWN_DAYS            = 5;     // Hány napig ne posztolja újra ugyanazt a terméket
+var MAX_ROWS_PER_SHEET       = 100;   // Lapcsoportonkénti maximális vizsgálati sorok
+var SLEEP_BETWEEN_POSTMS     = 5000;  // 5 másodperc anti-spam szünet a posztok között
+var MAX_POSTS_PER_RUN        = 6;     // Egy futáskor maximálisan kiküldhető posztok száma
+var MAX_POSTS_PER_SHEET      = 1;     // Lapcsoportonként max hány poszt menjen egy futásban (változatosság!)
 
 /***** ========== FŐ FUTTATÓ FÜGGVÉNY ========== *****/
 function postwithpicture() {
@@ -54,9 +55,11 @@ function postwithpicture() {
       if (rowCount <= 0) continue;
 
       const values = sh.getRange(2, 1, rowCount, lastCol).getValues();
+      let sheetPostedCount = 0;
 
       for (const row of values) {
         if (postedCount >= MAX_POSTS_PER_RUN) break;
+        if (sheetPostedCount >= MAX_POSTS_PER_SHEET) break;
 
         // Oszlopok beazonosítása séma alapján (9 oszlopos vs 16 oszlopos)
         const imgIdx       = 0;
@@ -112,7 +115,8 @@ function postwithpicture() {
 
         if (success) {
           postedCount++;
-          Logger.log(`[OK] Telegram poszt kiküldve (${postedCount}/${MAX_POSTS_PER_RUN}): ${name}`);
+          sheetPostedCount++;
+          Logger.log(`[OK] Telegram poszt kiküldve (${postedCount}/${MAX_POSTS_PER_RUN}) [${sheetName}]: ${name}`);
           Utilities.sleep(SLEEP_BETWEEN_POSTMS);
         }
       }

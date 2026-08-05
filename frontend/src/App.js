@@ -29,7 +29,7 @@ const DarkModeToggle = () => {
 };
 
 const SPREADSHEET_ID = '1qw3IXBpWlRx-ZFSueFaiPfA44lpMd1b5-MhnSIRwzMc';
-const SHEET_NAMES = ['BG Unique', 'BG Unique HUN', 'BG ALL Coupons', 'Geekbuying', 'Geekbuying Unique'];
+const SHEET_NAMES = ['BG Unique', 'BG Unique HUN', 'BG ALL Coupons', 'AliExpress ALL', 'Geekbuying', 'Geekbuying Unique'];
 
 async function fetchLiveGoogleSheet(sheetName) {
   const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
@@ -40,38 +40,50 @@ async function fetchLiveGoogleSheet(sheetName) {
 
   if (!json.table || !json.table.rows) return [];
 
+  const cols = json.table.cols || [];
+  const findColIndex = (keyWords, defaultIdx) => {
+    const idx = cols.findIndex(col => {
+      if (!col || !col.label) return false;
+      const label = col.label.toLowerCase();
+      return keyWords.some(kw => label.includes(kw));
+    });
+    return idx !== -1 ? idx : defaultIdx;
+  };
+
+  const is9ColSchema = cols.length === 9 || (cols[2] && cols[2].label && cols[2].label.toLowerCase().includes('link'));
+
+  const imgIdx = findColIndex(['image', 'kép'], 0);
+  const nameIdx = findColIndex(['product name', 'name', 'név', 'termék'], 1);
+  const linkIdx = findColIndex(['shortlink', 'link'], is9ColSchema ? 2 : 3);
+  const priceIdx = findColIndex(['coupon price', 'price', 'ár'], is9ColSchema ? 3 : 6);
+  const codeIdx = findColIndex(['coupon code', 'code', 'kupon'], is9ColSchema ? 4 : 7);
+  const warehouseIdx = findColIndex(['warehouse', 'raktár'], is9ColSchema ? 5 : 9);
+  const endTimeIdx = findColIndex(['end time', 'endtime', 'lejárat'], is9ColSchema ? 6 : 12);
+  const updateTimeIdx = findColIndex(['update time', 'updatetime', 'frissítés'], is9ColSchema ? 7 : 13);
+  const shortlinkIdx = findColIndex(['shortlink'], is9ColSchema ? 8 : (is9ColSchema ? 2 : 3));
+
   return json.table.rows.map(row => {
     const c = row.c || [];
-    const rawImage = c[0] ? c[0].v : '';
-    const name = c[1] ? c[1].v : '';
-    const productId = c[2] ? c[2].v : '';
-    const link = c[3] ? c[3].v : '';
-    const originalPrice = c[4] ? c[4].v : '';
-    const discount = c[5] ? c[5].v : '';
-    const price = c[6] ? c[6].v : '';
-    const code = c[7] ? c[7].v : '';
-    const quantity = c[8] ? c[8].v : '';
-    const warehouse = c[9] ? c[9].v : '';
-    const categories = c[10] ? c[10].v : '';
-    const startTime = c[11] ? c[11].v : '';
-    const endTime = c[12] ? c[12].v : '';
-    const updateTime = c[13] ? c[13].v : '';
+    const rawImage = c[imgIdx] ? c[imgIdx].v : '';
+    const name = c[nameIdx] ? c[nameIdx].v : '';
+    const link = c[linkIdx] ? c[linkIdx].v : '';
+    const price = c[priceIdx] ? c[priceIdx].v : '';
+    const code = c[codeIdx] ? c[codeIdx].v : '';
+    const warehouse = c[warehouseIdx] ? c[warehouseIdx].v : '';
+    const endTime = c[endTimeIdx] ? c[endTimeIdx].v : '';
+    const updateTime = c[updateTimeIdx] ? c[updateTimeIdx].v : '';
+    const shortlink = c[shortlinkIdx] ? c[shortlinkIdx].v : '';
 
     return {
       image: typeof rawImage === 'string' ? rawImage : '',
       name: typeof name === 'string' ? name : '',
-      productId: productId ? String(productId) : '',
       link: typeof link === 'string' ? link : '',
-      originalPrice: originalPrice ? String(originalPrice) : '',
-      discount: discount ? String(discount) : '',
       price: price ? String(price) : '',
       code: code ? String(code) : '',
-      quantity: quantity ? String(quantity) : '',
       warehouse: warehouse ? String(warehouse) : '',
-      categories: categories ? String(categories) : '',
-      startTime: startTime ? String(startTime) : '',
       endTime: endTime ? String(endTime) : '',
       updateTime: updateTime ? String(updateTime) : '',
+      shortlink: shortlink ? String(shortlink) : '',
       source: sheetName
     };
   }).filter(item => item.name && item.link);

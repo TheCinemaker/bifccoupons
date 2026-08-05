@@ -1,9 +1,9 @@
-name: Hourly Banggood API to Google Sheets Sync
+name: Hourly AliExpress API to Google Sheets Sync
 
 on:
   schedule:
-    # Minden óra 00. percében lefut automatikusan
-    - cron: '0 * * * *'
+    # Minden óra 05. percében lefut automatikusan
+    - cron: '5 * * * *'
   workflow_dispatch:
     # Kézi indítási lehetőség a GitHub felületén
 
@@ -24,10 +24,11 @@ jobs:
           cd backend
           npm install
 
-      - name: Run Banggood Sync Script
+      - name: Run AliExpress Sync Script
         env:
-          BANGGOOD_API_KEY: ${{ secrets.BANGGOOD_API_KEY }}
-          BANGGOOD_API_SECRET: ${{ secrets.BANGGOOD_API_SECRET }}
+          ALIEXPRESS_APP_KEY: ${{ secrets.ALIEXPRESS_APP_KEY }}
+          ALIEXPRESS_APP_SECRET: ${{ secrets.ALIEXPRESS_APP_SECRET }}
+          ALIEXPRESS_TRACKING_ID: ${{ secrets.ALIEXPRESS_TRACKING_ID }}
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         run: |
-          node backend/syncBanggood.js
+          node backend/syncAliExpress.js

@@ -70,18 +70,13 @@ async function fetchAllBanggoodCoupons() {
         return {
           image: c.coupon_img || '',
           name: name,
-          productId: c.product_id || '',
           link: c.promo_link_standard || '',
-          originalPrice: c.original_price || '',
-          discount: c.discount || '',
           price: c.condition || '0',
           code: c.coupon_code || '',
-          quantity: c.coupon_residual || '',
           warehouse: c.warehouse || '',
-          categories: c.category_name || '',
-          startTime: c.coupon_date_start || '',
           endTime: c.coupon_date_end || '',
-          updateTime: new Date().toISOString().split('T')[0],
+          updateTime: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          shortlink: c.promo_link_short || c.promo_link_standard || '',
           source: 'BG ALL Coupons'
         };
       });
@@ -121,27 +116,19 @@ async function syncToGoogleSheet(coupons) {
   console.log(`Google Sheets lap frissítése: [${sheet.title}]...`);
   await sheet.clear();
   await sheet.setHeaderRow([
-    'Image', 'Product name', 'ProductID', 'Link', 'Original price', 
-    'Discount', 'Coupon price', 'Coupon code', 'Quantitly', 'Warehouse', 
-    'Categories', 'Start time', 'End time', 'Update time', 'Source'
+    'image', 'name', 'link', 'price', 'code', 'warehouse', 'endTime', 'updateTime', 'shortlink'
   ]);
 
   const rows = coupons.map(c => ({
-    'Image': c.image,
-    'Product name': c.name,
-    'ProductID': c.productId,
-    'Link': c.link,
-    'Original price': c.originalPrice,
-    'Discount': c.discount,
-    'Coupon price': c.price,
-    'Coupon code': c.code,
-    'Quantitly': c.quantity,
-    'Warehouse': c.warehouse,
-    'Categories': c.categories,
-    'Start time': c.startTime,
-    'End time': c.endTime,
-    'Update time': c.updateTime,
-    'Source': c.source
+    'image': c.image,
+    'name': c.name,
+    'link': c.link,
+    'price': c.price,
+    'code': c.code,
+    'warehouse': c.warehouse,
+    'endTime': c.endTime,
+    'updateTime': c.updateTime,
+    'shortlink': c.shortlink
   }));
 
   // Batch insert sorok
@@ -152,7 +139,7 @@ async function syncToGoogleSheet(coupons) {
     console.log(`Hozzáadva ${i + chunk.length} / ${rows.length} sor...`);
   }
 
-  console.log('[OK] Google Sheet sikeresen frissítve az aznapi Banggood kuponokkal!');
+  console.log('[OK] Google Sheet sikeresen frissítve a 9 oszlopos sémával rendelkező Banggood kuponokkal!');
 }
 
 async function main() {

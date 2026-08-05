@@ -114,105 +114,152 @@ ${deal.link || ''}`;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const width = 800;
-    const height = 800;
-    canvas.width = width;
-    canvas.height = height;
+    const W = 800;
+    const H = 800;
+    canvas.width = W;
+    canvas.height = H;
 
+    // Dark background
     ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, W, H);
 
-    const img = new Image();
-    img.crossOrigin = 'Anonymous';
     const imageUrl = deal.image ? deal.image.replace('http://', 'https://') : '';
-    img.src = imageUrl;
 
-    const drawCanvasOverlay = () => {
-      // Bottom gradient
-      const bottomGradient = ctx.createLinearGradient(0, height - 200, 0, height);
-      bottomGradient.addColorStop(0, 'rgba(15, 23, 42, 0)');
-      bottomGradient.addColorStop(1, 'rgba(15, 23, 42, 0.9)');
-      ctx.fillStyle = bottomGradient;
-      ctx.fillRect(0, height - 200, width, 200);
+    const drawOverlay = () => {
+      // Bottom dark gradient
+      const botGrad = ctx.createLinearGradient(0, H - 260, 0, H);
+      botGrad.addColorStop(0, 'rgba(15, 23, 42, 0)');
+      botGrad.addColorStop(0.5, 'rgba(15, 23, 42, 0.7)');
+      botGrad.addColorStop(1, 'rgba(15, 23, 42, 0.95)');
+      ctx.fillStyle = botGrad;
+      ctx.fillRect(0, H - 260, W, 260);
 
-      // Top gradient
-      const topGradient = ctx.createLinearGradient(0, 0, 0, 120);
-      topGradient.addColorStop(0, 'rgba(15, 23, 42, 0.8)');
-      topGradient.addColorStop(1, 'rgba(15, 23, 42, 0)');
-      ctx.fillStyle = topGradient;
-      ctx.fillRect(0, 0, width, 120);
+      // Top dark gradient
+      const topGrad = ctx.createLinearGradient(0, 0, 0, 130);
+      topGrad.addColorStop(0, 'rgba(15, 23, 42, 0.85)');
+      topGrad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+      ctx.fillStyle = topGrad;
+      ctx.fillRect(0, 0, W, 130);
 
+      // --- Top badges ---
       // Warehouse badge top-left
       if (deal.warehouse) {
+        const whText = `Raktar: ${deal.warehouse}`;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        const whW = ctx.measureText(whText).width + 32;
         ctx.fillStyle = '#10b981';
         ctx.beginPath();
-        ctx.roundRect(25, 25, 220, 44, 10);
+        ctx.roundRect(20, 20, whW, 38, 8);
         ctx.fill();
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 18px "Plus Jakarta Sans", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`Raktar: ${deal.warehouse}`, 135, 53);
+        ctx.fillText(whText, 20 + whW / 2, 45);
       }
 
       // Source badge top-right
       if (deal.source) {
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        const srcW = ctx.measureText(deal.source).width + 32;
         ctx.fillStyle = '#ff5722';
         ctx.beginPath();
-        ctx.roundRect(width - 200, 25, 175, 44, 10);
+        ctx.roundRect(W - srcW - 20, 20, srcW, 38, 8);
         ctx.fill();
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 18px "Plus Jakarta Sans", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(deal.source, width - 112, 53);
+        ctx.fillText(deal.source, W - 20 - srcW / 2, 45);
       }
 
-      // Price bar bottom
-      const priceText = deal.price ? (deal.price.includes('Ft') || deal.price.includes('$') || deal.price.includes('EUR') ? deal.price : `${deal.price} Ft`) : '';
-      if (priceText) {
-        ctx.fillStyle = 'rgba(30, 41, 59, 0.92)';
-        ctx.strokeStyle = '#00f0ff';
+      // --- Bottom price area ---
+      const priceRaw = deal.price ? String(deal.price).trim() : '';
+      const priceText = priceRaw
+        ? (priceRaw.includes('Ft') || priceRaw.includes('$') || priceRaw.includes('EUR') || priceRaw.includes('USD')
+            ? priceRaw
+            : `${priceRaw} EUR`)
+        : '';
+
+      if (priceText || deal.code) {
+        // Dark panel background
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.roundRect(25, height - 120, width - 50, 95, 14);
+        ctx.roundRect(20, H - 140, W - 40, 120, 14);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#00f0ff';
-        ctx.font = '800 30px "Plus Jakarta Sans", sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(`Kuponos Ar: ${priceText}`, 45, height - 60);
+        // Price label + value (left side)
+        if (priceText) {
+          ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
+          ctx.font = '600 14px -apple-system, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText('AKCIOS AR', 40, H - 108);
 
+          ctx.fillStyle = '#00f0ff';
+          ctx.font = '800 32px -apple-system, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(priceText, 40, H - 72);
+        }
+
+        // Coupon code (right side)
         if (deal.code) {
+          ctx.font = '800 20px -apple-system, sans-serif';
+          const codeW = ctx.measureText(deal.code).width + 40;
+          const codeBoxW = Math.max(codeW, 140);
+          const codeX = W - 40 - codeBoxW;
+
+          // Code box background
           ctx.fillStyle = '#ffb703';
           ctx.beginPath();
-          ctx.roundRect(width - 300, height - 105, 260, 65, 12);
+          ctx.roundRect(codeX, H - 118, codeBoxW, 56, 10);
           ctx.fill();
-          ctx.fillStyle = '#0f172a';
-          ctx.font = '800 14px "Plus Jakarta Sans", sans-serif';
+
+          // Code label
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+          ctx.font = '700 11px -apple-system, sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText('KUPONKOD:', width - 170, height - 75);
-          ctx.font = '800 22px "Plus Jakarta Sans", sans-serif';
-          ctx.fillText(deal.code, width - 170, height - 48);
+          ctx.fillText('KUPONKOD', codeX + codeBoxW / 2, H - 98);
+
+          // Code value
+          ctx.fillStyle = '#0f172a';
+          ctx.font = '800 20px -apple-system, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(deal.code, codeX + codeBoxW / 2, H - 74);
+        }
+
+        // Product name at the very bottom
+        if (deal.name) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+          ctx.font = '500 13px -apple-system, sans-serif';
+          ctx.textAlign = 'left';
+          const truncName = deal.name.length > 75 ? deal.name.substring(0, 75) + '...' : deal.name;
+          ctx.fillText(truncName, 40, H - 32);
         }
       }
     };
 
+    // Load image WITHOUT crossOrigin to avoid CORS blocking from CDNs
+    const img = new Image();
+    // Do NOT set img.crossOrigin - this lets the image load from any CDN
+    // Trade-off: canvas becomes "tainted" so clipboard copy won't work,
+    // but download and visual display both work fine
+    img.src = imageUrl;
+
     img.onload = () => {
-      const scale = Math.max(width / img.width, height / img.height);
-      const x = (width / 2) - (img.width / 2) * scale;
-      const y = (height / 2) - (img.height / 2) * scale;
+      const scale = Math.max(W / img.width, H / img.height);
+      const x = (W / 2) - (img.width / 2) * scale;
+      const y = (H / 2) - (img.height / 2) * scale;
       ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-      drawCanvasOverlay();
+      drawOverlay();
     };
 
     img.onerror = () => {
       ctx.fillStyle = '#1e293b';
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = '#94a3b8';
-      ctx.font = 'bold 24px "Plus Jakarta Sans", sans-serif';
+      ctx.font = 'bold 22px -apple-system, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(deal.name || 'Termekkep', width / 2, height / 2);
-      drawCanvasOverlay();
+      ctx.fillText(deal.name || 'Termekkep nem elerheto', W / 2, H / 2);
+      drawOverlay();
     };
   }, [deal]);
 
@@ -231,27 +278,40 @@ ${deal.link || ''}`;
   const handleDownloadImage = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const link = document.createElement('a');
-    link.download = `fb-poszt-${(deal.code || 'termek').toLowerCase()}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    try {
+      const link = document.createElement('a');
+      link.download = `fb-poszt-${(deal.code || 'termek').toLowerCase()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (err) {
+      alert('A kep letoltese nem sikerult (CORS). Hasznalja a jobb klikk -> Kep mentese opciot.');
+    }
   };
 
   const handleCopyImageToClipboard = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     try {
-      canvas.toBlob(async (blob) => {
-        if (blob && navigator.clipboard && window.ClipboardItem) {
-          const item = new window.ClipboardItem({ 'image/png': blob });
-          await navigator.clipboard.write([item]);
-          setCopyImageSuccess(true);
-          setTimeout(() => setCopyImageSuccess(false), 2000);
-        } else {
-          handleDownloadImage();
+      const blob = await new Promise((resolve, reject) => {
+        try {
+          canvas.toBlob((b) => {
+            if (b) resolve(b);
+            else reject(new Error('No blob'));
+          }, 'image/png');
+        } catch (e) {
+          reject(e);
         }
       });
+      if (navigator.clipboard && window.ClipboardItem) {
+        const item = new window.ClipboardItem({ 'image/png': blob });
+        await navigator.clipboard.write([item]);
+        setCopyImageSuccess(true);
+        setTimeout(() => setCopyImageSuccess(false), 2000);
+      } else {
+        handleDownloadImage();
+      }
     } catch (err) {
+      // Canvas is tainted from cross-origin image, fallback to download
       handleDownloadImage();
     }
   };

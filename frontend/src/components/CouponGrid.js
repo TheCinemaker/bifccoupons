@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, setSearchTerm, onSendToStudio }) => {
   const [copiedCode, setCopiedCode] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(36);
 
   const sheets = ['Összes', 'BG Unique', 'BG Unique HUN', 'BG ALL Coupons', 'Geekbuying', 'Geekbuying Unique', 'Banggood'];
+
+  useEffect(() => {
+    setVisibleCount(36);
+  }, [activeSheet, searchTerm]);
 
   const handleClearSearch = () => {
     setSearchTerm('');
@@ -27,6 +32,8 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
 
     return matchesSearch && matchesSheet;
   });
+
+  const visibleCoupons = filteredCoupons.slice(0, visibleCount);
 
   return (
     <div className="coupon-grid-section">
@@ -60,13 +67,13 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
       </div>
 
       <div className="results-info">
-        <span>Kuponok száma: <strong>{filteredCoupons.length} db</strong></span>
+        <span>Megjelenítve: <strong>{visibleCoupons.length} / {filteredCoupons.length} db kupon</strong></span>
         {activeSheet !== 'Összes' && <span className="active-filter-badge">Szűrő: {activeSheet}</span>}
       </div>
 
       <div className="coupons-grid">
-        {filteredCoupons.length > 0 ? (
-          filteredCoupons.map((coupon, index) => {
+        {visibleCoupons.length > 0 ? (
+          visibleCoupons.map((coupon, index) => {
             const secureImageUrl = coupon.image
               ? coupon.image.replace('http://', 'https://')
               : 'https://images.unsplash.com/photo-1585515320310-259814833e62?auto=format&fit=crop&w=400&q=80';
@@ -78,6 +85,7 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
                     src={secureImageUrl} 
                     alt={coupon.name} 
                     className="coupon-image" 
+                    referrerPolicy="no-referrer"
                     onError={(e) => {
                       e.target.onerror = null;
                       e.target.src = 'https://images.unsplash.com/photo-1585515320310-259814833e62?auto=format&fit=crop&w=400&q=80';
@@ -144,6 +152,18 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
           </div>
         )}
       </div>
+
+      {visibleCount < filteredCoupons.length && (
+        <div style={{ textAlign: 'center', marginTop: '2rem' }}>
+          <button 
+            className="btn-action btn-secondary" 
+            onClick={() => setVisibleCount(prev => prev + 48)}
+            style={{ padding: '0.85rem 2rem' }}
+          >
+            További kuponok betöltése ({filteredCoupons.length - visibleCount} maradt)
+          </button>
+        </div>
+      )}
     </div>
   );
 };

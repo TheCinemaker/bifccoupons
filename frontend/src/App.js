@@ -91,33 +91,25 @@ function App() {
     async function loadAllLiveSheets() {
       try {
         setApiStatus({ loading: true, error: null });
-        let allLiveCoupons = [];
 
-        // 1. Megpróbáljuk letölteni az összes élő lapot közvetlenül a Google Sheets-ből
-        for (const sheetName of SHEET_NAMES) {
-          try {
-            const sheetCoupons = await fetchLiveGoogleSheet(sheetName);
-            allLiveCoupons = [...allLiveCoupons, ...sheetCoupons];
-          } catch (sheetErr) {
-            console.warn(`Hiba a(z) ${sheetName} lap letöltésekor:`, sheetErr.message);
+        // Párhuzamos lekérés az összes lapra a maximális sebességért
+        const sheetPromises = SHEET_NAMES.map(name => fetchLiveGoogleSheet(name));
+        const results = await Promise.allSettled(sheetPromises);
+
+        let allLiveCoupons = [];
+        results.forEach(res => {
+          if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+            allLiveCoupons = allLiveCoupons.concat(res.value);
           }
-        }
+        });
 
         if (isMounted) {
           if (allLiveCoupons.length > 0) {
-            console.log('Összesen betöltött élő kuponok száma a Google Sheets-ből:', allLiveCoupons.length);
+            console.log('Összesen betöltött élő kuponok száma (párhuzamos beolvasással):', allLiveCoupons.length);
             setCoupons(allLiveCoupons);
             setApiStatus({ loading: false, error: null });
           } else {
-            // Ha a gviz endpoint nem adna adatot, megpróbáljuk a saját backend API-t
-            const res = await fetch('https://bifc-couponfinder.onrender.com/api/coupons');
-            const data = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
-              setCoupons(data);
-              setApiStatus({ loading: false, error: null });
-            } else {
-              setApiStatus({ loading: false, error: 'A Google Sheets táblázat elérhető, de nincs érvényes sor.' });
-            }
+            setApiStatus({ loading: false, error: 'A Google Sheets táblázat elérhető, de nincs érvényes sor.' });
           }
         }
       } catch (err) {

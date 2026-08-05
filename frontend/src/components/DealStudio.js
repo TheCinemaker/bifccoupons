@@ -35,10 +35,10 @@ const formatStudioPrice = (rawPrice, source) => {
   let num = parseFloat(numStr);
   if (!isNaN(num)) {
     str = (num % 1 === 0) ? String(Math.round(num)) : num.toFixed(2);
+    return `${str} USD`;
   }
 
-  const currency = getCurrencyForSource(source);
-  return `${str} ${currency}`;
+  return str;
 };
 
 const DealStudio = ({ initialDeal, availableCoupons = [] }) => {

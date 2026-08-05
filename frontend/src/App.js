@@ -52,13 +52,13 @@ async function fetchLiveGoogleSheet(sheetName) {
     return idx !== -1 ? idx : defaultIdx;
   };
 
-  const is9ColSchema = cols.length === 9 || (cols[2] && cols[2].label && cols[2].label.toLowerCase().includes('link'));
+  const is9ColSchema = sheetName === 'BANGGOODAPI' || sheetName === 'ALIEXPRESSAPI' || cols.length === 9;
 
   const imgIdx = findColIndex(['image', 'kép', 'fotó'], 0);
-  const nameIdx = findColIndex(['product name', 'name', 'név', 'termék'], 1);
+  const nameIdx = findColIndex(['product name', 'productname', 'name', 'név', 'termék'], 1);
   const linkIdx = findColIndex(['shortlink', 'link', 'url'], is9ColSchema ? 2 : 3);
-  const priceIdx = findColIndex(['coupon price', 'price', 'akciós ár', 'akcios ar', 'kupon ár', 'kupon ar', 'ár', 'ar'], is9ColSchema ? 3 : 6);
-  const codeIdx = findColIndex(['coupon code', 'code', 'kupon'], is9ColSchema ? 4 : 7);
+  const priceIdx = findColIndex(['coupon price', 'couponprice', 'akciós ár', 'akcios ar', 'kupon ár', 'kupon ar'], is9ColSchema ? 3 : 6);
+  const codeIdx = findColIndex(['coupon code', 'couponcode', 'code', 'kupon'], is9ColSchema ? 4 : 7);
   const warehouseIdx = findColIndex(['warehouse', 'raktár'], is9ColSchema ? 5 : 9);
   const endTimeIdx = findColIndex(['end time', 'endtime', 'lejárat'], is9ColSchema ? 6 : 12);
   const updateTimeIdx = findColIndex(['update time', 'updatetime', 'frissítés'], is9ColSchema ? 7 : 13);

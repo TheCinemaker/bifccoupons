@@ -1,15 +1,5 @@
 import React, { useState, useEffect } from 'react';
 
-// Currency mapping by source/store
-const getCurrencyForSource = (source) => {
-  if (!source) return 'USD';
-  const s = source.toLowerCase();
-  if (s.includes('geekbuying unique') || s.includes('geekbuying')) return 'USD';
-  if (s.includes('bg unique') || s.includes('banggood')) return 'USD';
-  if (s.includes('aliexpress')) return 'USD';
-  return 'USD';
-};
-
 const formatDisplayPrice = (rawPrice, source) => {
   if (rawPrice === null || rawPrice === undefined || String(rawPrice).trim() === '') {
     return 'Lásd a linken';

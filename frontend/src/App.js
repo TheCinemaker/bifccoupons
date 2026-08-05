@@ -1,5 +1,4 @@
-/* eslint-disable jsx-a11y/accessible-emoji */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import './Coupons.css';
 import CouponGrid from './components/CouponGrid';
 import DealStudio from './components/DealStudio';
@@ -101,6 +100,23 @@ function App() {
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const pressTimerRef = useRef(null);
+
+  const startPressTimer = () => {
+    pressTimerRef.current = setTimeout(() => {
+      if (!isAdmin) {
+        setIsAdminModalOpen(true);
+      }
+    }, 3000); // 3-second hold to open admin PIN modal
+  };
+
+  const cancelPressTimer = () => {
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+  };
+
   const switchTab = (tab) => {
     setActiveTab(tab);
     setMobileMenuOpen(false);
@@ -170,7 +186,21 @@ function App() {
     <div className="app-container">
       <header className="main-header">
         <div className="header-top-row">
-          <div className="logo-brand">
+          <div 
+            className="logo-brand clickable-brand"
+            onMouseDown={startPressTimer}
+            onMouseUp={cancelPressTimer}
+            onMouseLeave={cancelPressTimer}
+            onTouchStart={startPressTimer}
+            onTouchEnd={cancelPressTimer}
+            onClick={(e) => {
+              // Triple click fallback
+              if (e.detail === 3 && !isAdmin) {
+                setIsAdminModalOpen(true);
+              }
+            }}
+            title="Tartsd nyomva 3 másodpercig az Admin belépéshez"
+          >
             <div>
               <h1 className="brand-title">KINABOLVEDDMEG</h1>
               <p className="brand-subtitle">BUYITFROMCHINA - PREMIUMLISZTALT KUPONOK ES AKCIOK</p>
@@ -196,7 +226,7 @@ function App() {
             className={`nav-tab ${activeTab === 'coupons' ? 'active' : ''}`}
             onClick={() => switchTab('coupons')}
           >
-            Kinalat ({coupons.length})
+            Kínálat ({coupons.length})
           </button>
           
           <button 
@@ -220,15 +250,14 @@ function App() {
               >
                 Live Feeds
               </button>
+              <button 
+                className="nav-tab lock-tab logged-in"
+                onClick={() => { handleAdminClick(); setMobileMenuOpen(false); }}
+              >
+                Admin (Kijelentkezés)
+              </button>
             </>
           )}
-
-          <button 
-            className={`nav-tab lock-tab ${isAdmin ? 'logged-in' : ''}`}
-            onClick={() => { handleAdminClick(); setMobileMenuOpen(false); }}
-          >
-            {isAdmin ? 'Admin (Kijelentkezes)' : 'Admin Belepes'}
-          </button>
         </nav>
       </header>
 

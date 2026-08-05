@@ -4,18 +4,15 @@ const formatDisplayPrice = (rawPrice) => {
   if (!rawPrice) return 'Lásd a linken';
   let str = String(rawPrice).trim();
 
-  // Ha a nyers szövegben benne van az EUR, USD vagy $ érmenév, töröljük a mögé keveredett Ft-ot!
   if (/EUR|\$|USD|€|GBP|£/i.test(str)) {
     str = str.replace(/Ft/gi, '').trim();
     return str;
   }
 
-  // Ha a szövegben már szerepel a Ft szó, hagyjuk úgy
   if (/Ft/i.test(str)) {
     return str;
   }
 
-  // Ha tisztán szám, mögé tesszük a Ft-ot
   return `${str} Ft`;
 };
 
@@ -23,7 +20,6 @@ const formatDisplayDate = (rawDate) => {
   if (!rawDate) return '';
   let str = String(rawDate).trim();
 
-  // Ha a ronda Google Sheets Date(2026,8,30) formátumban van, alakítsuk tisztává
   if (str.includes('Date(')) {
     const match = str.match(/Date\((\d+),(\d+),(\d+)\)/);
     if (match) {
@@ -102,16 +98,18 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
           )}
         </div>
 
-        <div className="tabs-container">
-          {STORE_TABS.map(tab => (
-            <button
-              key={tab.label}
-              className={`tab-pill ${tab.label === activeSheet ? 'active' : ''}`}
-              onClick={() => setActiveSheet(tab.label)}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="tabs-scroll-wrapper">
+          <div className="tabs-container">
+            {STORE_TABS.map(tab => (
+              <button
+                key={tab.label}
+                className={`tab-pill ${tab.label === activeSheet ? 'active' : ''}`}
+                onClick={() => setActiveSheet(tab.label)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -208,11 +206,10 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
       </div>
 
       {visibleCount < filteredCoupons.length && (
-        <div style={{ textAlign: 'center', marginTop: '2.5rem' }}>
+        <div className="load-more-wrapper">
           <button 
-            className="btn-mac btn-mac-secondary" 
+            className="btn-mac btn-mac-secondary load-more-btn" 
             onClick={() => setVisibleCount(prev => prev + 48)}
-            style={{ padding: '0.85rem 2.5rem' }}
           >
             További kuponok betöltése ({filteredCoupons.length - visibleCount} maradt)
           </button>

@@ -1,0 +1,33 @@
+name: Daily Banggood API to Google Sheets Sync
+
+on:
+  schedule:
+    # Minden nap hajnali 04:00 UTC-kor lefut automatikusan
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    # Kézi indítási lehetőség a GitHub felületén
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm install
+
+      - name: Run Banggood Sync Script
+        env:
+          BANGGOOD_API_KEY: ${{ secrets.BANGGOOD_API_KEY }}
+          BANGGOOD_API_SECRET: ${{ secrets.BANGGOOD_API_SECRET }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          node backend/syncBanggood.js

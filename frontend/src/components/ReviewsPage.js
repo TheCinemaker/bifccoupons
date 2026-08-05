@@ -89,7 +89,7 @@ const ReviewsPage = ({ isAdmin }) => {
     <div className="reviews-page">
       <div className="reviews-header-banner">
         <h2>Tesztek és unboxing anyagok</h2>
-        <p>Saját tapasztalatok, tesztek és kicsomagoló leírások a KÍNÁBÓL VEDD MEG csapatától.</p>
+        <p>Saját tapasztalatok, tesztek és kicsomagoló leírások a KÍNÁBÓLVEDDMEG csapatától.</p>
 
         {isAdmin && (
           <button

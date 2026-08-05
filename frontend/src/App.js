@@ -419,7 +419,7 @@ function App() {
               }}
               title="Tartsd nyomva 3 másodpercig az admin belépéshez"
             >
-              <h1 className="brand-title">KÍNÁBÓL VEDD MEG</h1>
+              <h1 className="brand-title">KÍNÁBÓLVEDDMEG</h1>
               <p className="brand-subtitle">BUYITFROMCHINA · PRÉMIUM KUPONOK ÉS AKCIÓK</p>
             </div>
             <span className="brand-hold-bar" />

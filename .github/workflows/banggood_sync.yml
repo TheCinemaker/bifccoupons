@@ -1,15 +1,16 @@
-name: Hourly Banggood API to Google Sheets Sync
+name: Banggood API to Google Sheets Sync (2 óránként)
 
 on:
   schedule:
-    # Minden óra 00. percében lefut automatikusan
-    - cron: '0 * * * *'
+    # Kétóránként, a páros órák 00. percében
+    - cron: '0 */2 * * *'
   workflow_dispatch:
     # Kézi indítási lehetőség a GitHub felületén
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

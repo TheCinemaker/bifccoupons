@@ -1,15 +1,16 @@
-name: Hourly AliExpress API to Google Sheets Sync
+name: AliExpress API to Google Sheets Sync (2 óránként)
 
 on:
   schedule:
-    # Minden óra 05. percében lefut automatikusan
-    - cron: '5 * * * *'
+    # Kétóránként, a páros órák 30. percében (eltolva a Banggood futáshoz képest)
+    - cron: '30 */2 * * *'
   workflow_dispatch:
     # Kézi indítási lehetőség a GitHub felületén
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

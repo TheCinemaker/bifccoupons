@@ -2,12 +2,12 @@
  * KINABOLVEDDMEG - TELEGRAM AUTOMATA POSZTOLÓ ROBOT (Google Apps Script)
  * ====================================================================== *****/
 
-const TELEGRAM_BOT_TOKEN = "6082362477:AAFOKlAuwIeziUT-aj2sj5kbvGErJjUsrEA";
-const TELEGRAM_CHAT_ID   = "-1001268818190";
-const SPREADSHEET_ID     = "1qw3IXBpWlRx-ZFSueFaiPfA44lpMd1b5-MhnSIRwzMc";
+var TELEGRAM_BOT_TOKEN = "6082362477:AAFOKlAuwIeziUT-aj2sj5kbvGErJjUsrEA";
+var TELEGRAM_CHAT_ID   = "-1001268818190";
+var SPREADSHEET_ID     = "1qw3IXBpWlRx-ZFSueFaiPfA44lpMd1b5-MhnSIRwzMc";
 
 // Összes aktív Google Sheet lap neve
-const SHEET_NAMES = [
+var SHEET_NAMES = [
   "BG Unique",
   "BG Unique HUN",
   "BANGGOODAPI",
@@ -17,10 +17,10 @@ const SHEET_NAMES = [
 ];
 
 /***** ========== BEÁLLÍTÁSOK ========== *****/
-const COOLDOWN_DAYS        = 5;     // Hány napig ne posztolja újra ugyanazt a terméket
-const MAX_ROWS_PER_SHEET   = 100;   // Lapcsoportonkénti maximális vizsgálati sorok
-const SLEEP_BETWEEN_POSTMS = 5000;  // 5 másodperc anti-spam szünet a posztok között
-const MAX_POSTS_PER_RUN    = 5;     // Egy futáskor maximálisan kiküldhető posztok száma
+var COOLDOWN_DAYS        = 5;     // Hány napig ne posztolja újra ugyanazt a terméket
+var MAX_ROWS_PER_SHEET   = 100;   // Lapcsoportonkénti maximális vizsgálati sorok
+var SLEEP_BETWEEN_POSTMS = 5000;  // 5 másodperc anti-spam szünet a posztok között
+var MAX_POSTS_PER_RUN    = 5;     // Egy futáskor maximálisan kiküldhető posztok száma
 
 /***** ========== FŐ FUTTATÓ FÜGGVÉNY ========== *****/
 function postwithpicture() {

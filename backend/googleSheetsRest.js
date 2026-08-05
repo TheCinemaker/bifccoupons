@@ -13,25 +13,38 @@ const CREDENTIALS_PATH = path.join(__dirname, 'config', 'credentials.json');
 
 async function getGoogleAccessToken() {
   const authOptions = { scopes: ['https://www.googleapis.com/auth/spreadsheets'] };
+
   if (process.env.GOOGLE_CREDENTIALS_JSON) {
-    const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
-    creds.private_key = creds.private_key ? creds.private_key.replace(/\\n/g, '\n') : '';
-    authOptions.credentials = creds;
+    try {
+      console.log('[OK] GOOGLE_CREDENTIALS_JSON secret betöltése...');
+      const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON.trim());
+      if (creds && creds.private_key) {
+        creds.private_key = creds.private_key.split('\\n').join('\n');
+      }
+      authOptions.credentials = creds;
+    } catch (err) {
+      console.error('Hiba a GOOGLE_CREDENTIALS_JSON értelmezésekor:', err.message);
+      throw err;
+    }
   } else if (fs.existsSync(CREDENTIALS_PATH)) {
+    console.log('[OK] Helyi credentials.json betöltése...');
     authOptions.keyFile = CREDENTIALS_PATH;
   } else {
-    throw new Error('Google Credentials nem található');
+    throw new Error('GOOGLE_CREDENTIALS_JSON secret hiányzik a környezeti változókból / GitHub Secrets-ből!');
   }
 
   const auth = new GoogleAuth(authOptions);
   const client = await auth.getClient();
   const res = await client.getAccessToken();
+  if (!res || !res.token) {
+    throw new Error('Nem sikerült Google Access Token-t kérni.');
+  }
   return res.token;
 }
 
 async function writeRowsToSheet(sheetTitle, headers, rowsData) {
   const token = await getGoogleAccessToken();
-  console.log(`[OK] Google Access Token lekérve. Frissítés [${sheetTitle}]...`);
+  console.log(`[OK] Google Access Token sikeresen lekérve. Frissítés [${sheetTitle}] (${rowsData.length} sor)...`);
 
   const range = `${sheetTitle}!A1:Z10000`;
   try {
@@ -41,7 +54,7 @@ async function writeRowsToSheet(sheetTitle, headers, rowsData) {
       { headers: { Authorization: `Bearer ${token}` } }
     );
   } catch (e) {
-    console.warn(`Lap ürítési hiba (${sheetTitle}):`, e.response ? JSON.stringify(e.response.data) : e.message);
+    console.warn(`Lap ürítési figyelmeztetés (${sheetTitle}):`, e.response ? JSON.stringify(e.response.data) : e.message);
   }
 
   const values = [headers, ...rowsData.map(r => [
@@ -71,9 +84,3 @@ async function writeRowsToSheet(sheetTitle, headers, rowsData) {
 }
 
 module.exports = { writeRowsToSheet, getGoogleAccessToken };
-
-if (require.main === module) {
-  writeRowsToSheet('BANGGOODAPI', ['image', 'name', 'link', 'price', 'code', 'warehouse', 'endTime', 'updateTime', 'shortlink'], [
-    { image: 'test.jpg', name: 'Test Product', link: 'https://test.com', price: '100', code: 'TEST', warehouse: 'CZ', endTime: '2026-12-31', updateTime: '2026-08-05', shortlink: 'https://test.com' }
-  ]).catch(err => console.error('Hiba:', err.response ? JSON.stringify(err.response.data) : err.message));
-}

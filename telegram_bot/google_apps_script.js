@@ -6,14 +6,14 @@ var TELEGRAM_BOT_TOKEN = "6082362477:AAFOKlAuwIeziUT-aj2sj5kbvGErJjUsrEA";
 var TELEGRAM_CHAT_ID   = "-1001268818190";
 var SPREADSHEET_ID     = "1qw3IXBpWlRx-ZFSueFaiPfA44lpMd1b5-MhnSIRwzMc";
 
-// Összes aktív Google Sheet lap neve (AliExpress előre véve a változatosságért)
+// Összes aktív Google Sheet lap neve pontosan a táblázat sorrendjében
 var SHEET_NAMES = [
-  "ALIEXPRESSAPI",
-  "BG Unique",
-  "Geekbuying Unique",
   "BANGGOODAPI",
+  "ALIEXPRESSAPI",
+  "BG Unique HUN",
+  "BG Unique",
   "Geekbuying",
-  "BG Unique HUN"
+  "Geekbuying Unique"
 ];
 
 /***** ========== BEÁLLÍTÁSOK ========== *****/
@@ -92,6 +92,7 @@ function postwithpicture() {
           const daysPassed = (now - lastPosted) / (1000 * 60 * 60 * 24);
 
           if (daysPassed < COOLDOWN_DAYS) {
+            Logger.log(`[SKIP - Cooldown (${daysPassed.toFixed(1)} nap)] ${sheetName}: ${name}`);
             continue; // Ugyanaz a poszt még a cooldown időszakon belül van
           }
           hashSheet.getRange(existingRow, 3).setValue(now);

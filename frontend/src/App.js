@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/accessible-emoji */
 import React, { useEffect, useState } from 'react';
 import './Coupons.css';
 import CouponGrid from './components/CouponGrid';
@@ -27,55 +28,57 @@ const DarkModeToggle = () => {
   );
 };
 
-const mockFallbackCoupons = [
-  {
-    name: 'Xiaomi Mi Smart Air Fryer 3.5L Okos Forrólevegős Sütő',
-    price: '18990',
-    originalPrice: '28990',
-    code: 'BGXIAOMI35',
-    link: 'https://www.banggood.com/custlink/353490',
-    image: 'https://images.unsplash.com/photo-1585515320310-259814833e62?auto=format&fit=crop&w=600&q=80',
-    warehouse: 'CZ Raktár',
-    source: 'BG Unique',
-    endTime: '2026-08-31'
-  },
-  {
-    name: 'NEXTOOL 16 in 1 Kompakt Multi-Tool Szerszám Fogó',
-    price: '6490',
-    originalPrice: '12990',
-    code: 'BGTOOL16',
-    link: 'https://www.banggood.com/custlink/nextool16',
-    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80',
-    warehouse: 'HK Raktár',
-    source: 'BG Unique HUN',
-    endTime: '2026-08-25'
-  },
-  {
-    name: 'Engwe EP-2 Pro 750W Összecsukható Elektromos Kerékpár',
-    price: '289900',
-    originalPrice: '389900',
-    code: 'GKBEP2PRO',
-    link: 'https://www.geekbuying.com/item/engwe-ep2pro',
-    image: 'https://images.unsplash.com/photo-1571068316344-75bc76f77890?auto=format&fit=crop&w=600&q=80',
-    warehouse: 'PL Raktár',
-    source: 'Geekbuying Unique',
-    endTime: '2026-08-30'
-  },
-  {
-    name: 'Teclast P30T 10.1 hüvelykes Android 14 Tablet 128GB',
-    price: '32990',
-    originalPrice: '45990',
-    code: 'BGTECLASTP30',
-    link: 'https://www.banggood.com/custlink/teclastp30',
-    image: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&w=600&q=80',
-    warehouse: 'CZ Raktár',
-    source: 'Banggood',
-    endTime: '2026-08-28'
-  }
-];
+const SPREADSHEET_ID = '1qw3IXBpWlRx-ZFSueFaiPfA44lpMd1b5-MhnSIRwzMc';
+const SHEET_NAMES = ['BG Unique', 'BG Unique HUN', 'BG ALL Coupons', 'Geekbuying', 'Geekbuying Unique'];
+
+async function fetchLiveGoogleSheet(sheetName) {
+  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url);
+  const text = await res.text();
+  const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+  const json = JSON.parse(jsonString);
+
+  if (!json.table || !json.table.rows) return [];
+
+  return json.table.rows.map(row => {
+    const c = row.c || [];
+    const rawImage = c[0] ? c[0].v : '';
+    const name = c[1] ? c[1].v : '';
+    const productId = c[2] ? c[2].v : '';
+    const link = c[3] ? c[3].v : '';
+    const originalPrice = c[4] ? c[4].v : '';
+    const discount = c[5] ? c[5].v : '';
+    const price = c[6] ? c[6].v : '';
+    const code = c[7] ? c[7].v : '';
+    const quantity = c[8] ? c[8].v : '';
+    const warehouse = c[9] ? c[9].v : '';
+    const categories = c[10] ? c[10].v : '';
+    const startTime = c[11] ? c[11].v : '';
+    const endTime = c[12] ? c[12].v : '';
+    const updateTime = c[13] ? c[13].v : '';
+
+    return {
+      image: typeof rawImage === 'string' ? rawImage : '',
+      name: typeof name === 'string' ? name : '',
+      productId: productId ? String(productId) : '',
+      link: typeof link === 'string' ? link : '',
+      originalPrice: originalPrice ? String(originalPrice) : '',
+      discount: discount ? String(discount) : '',
+      price: price ? String(price) : '',
+      code: code ? String(code) : '',
+      quantity: quantity ? String(quantity) : '',
+      warehouse: warehouse ? String(warehouse) : '',
+      categories: categories ? String(categories) : '',
+      startTime: startTime ? String(startTime) : '',
+      endTime: endTime ? String(endTime) : '',
+      updateTime: updateTime ? String(updateTime) : '',
+      source: sheetName
+    };
+  }).filter(item => item.name && item.link);
+}
 
 function App() {
-  const [coupons, setCoupons] = useState(mockFallbackCoupons);
+  const [coupons, setCoupons] = useState([]);
   const [activeTab, setActiveTab] = useState('coupons');
   const [activeSheet, setActiveSheet] = useState('Összes');
   const [searchTerm, setSearchTerm] = useState('');
@@ -85,24 +88,47 @@ function App() {
   useEffect(() => {
     let isMounted = true;
     
-    fetch('https://bifc-couponfinder.onrender.com/api/coupons')
-      .then(res => {
-        if (!res.ok) throw new Error('API válasz hiba');
-        return res.json();
-      })
-      .then(data => {
-        if (isMounted && Array.isArray(data) && data.length > 0) {
-          console.log('Google Sheets API kuponok betöltve:', data.length);
-          setCoupons(data);
-          setApiStatus({ loading: false, error: null });
+    async function loadAllLiveSheets() {
+      try {
+        setApiStatus({ loading: true, error: null });
+        let allLiveCoupons = [];
+
+        // 1. Megpróbáljuk letölteni az összes élő lapot közvetlenül a Google Sheets-ből
+        for (const sheetName of SHEET_NAMES) {
+          try {
+            const sheetCoupons = await fetchLiveGoogleSheet(sheetName);
+            allLiveCoupons = [...allLiveCoupons, ...sheetCoupons];
+          } catch (sheetErr) {
+            console.warn(`Hiba a(z) ${sheetName} lap letöltésekor:`, sheetErr.message);
+          }
         }
-      })
-      .catch(err => {
-        console.warn('API lekérési hiba, biztonsági adatok használata:', err.message);
+
         if (isMounted) {
-          setApiStatus({ loading: false, error: 'Saját API offline, mintaadatok betöltve.' });
+          if (allLiveCoupons.length > 0) {
+            console.log('Összesen betöltött élő kuponok száma a Google Sheets-ből:', allLiveCoupons.length);
+            setCoupons(allLiveCoupons);
+            setApiStatus({ loading: false, error: null });
+          } else {
+            // Ha a gviz endpoint nem adna adatot, megpróbáljuk a saját backend API-t
+            const res = await fetch('https://bifc-couponfinder.onrender.com/api/coupons');
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              setCoupons(data);
+              setApiStatus({ loading: false, error: null });
+            } else {
+              setApiStatus({ loading: false, error: 'A Google Sheets táblázat elérhető, de nincs érvényes sor.' });
+            }
+          }
         }
-      });
+      } catch (err) {
+        console.error('Kuponok betöltési hibája:', err);
+        if (isMounted) {
+          setApiStatus({ loading: false, error: 'Nem sikerült az élő kuponok letöltése a Google Sheets-ből.' });
+        }
+      }
+    }
+
+    loadAllLiveSheets();
 
     return () => { isMounted = false; };
   }, []);
@@ -148,8 +174,14 @@ function App() {
         <DarkModeToggle />
       </header>
 
-      {apiStatus.error && (
+      {apiStatus.loading && (
         <div className="status-banner info">
+          <span>Élő kuponok töltése a Google Sheets táblázatból (ID: 1qw3IXBpWl...)...</span>
+        </div>
+      )}
+
+      {apiStatus.error && !apiStatus.loading && (
+        <div className="status-banner error">
           <span>[INFO] {apiStatus.error}</span>
         </div>
       )}
@@ -168,7 +200,7 @@ function App() {
 
         {activeTab === 'studio' && (
           <DealStudio 
-            initialDeal={selectedDealForStudio || (coupons[0] || mockFallbackCoupons[0])}
+            initialDeal={selectedDealForStudio || (coupons.length > 0 ? coupons[0] : null)}
             availableCoupons={coupons}
             onSelectDeal={(deal) => setSelectedDealForStudio(deal)}
           />
@@ -176,22 +208,30 @@ function App() {
 
         {activeTab === 'feeds' && (
           <div className="feeds-container panel">
-            <h2>Live Adatforrások & API Státusz</h2>
-            <p className="text-muted">A kuponok szinkronizációja folyamatos a Google Sheets és a Banggood API között.</p>
+            <h2>Live Adatforrások & Google Sheets Státusz</h2>
+            <p className="text-muted">A kuponok közvetlenül a Google Sheets táblázatodból olvasódnak be élőben.</p>
             
             <div className="feeds-grid">
               <div className="feed-card">
-                <h3>Google Sheets Sync</h3>
-                <p><strong>Sheet ID:</strong> <code>1qw3IXBpWl...</code></p>
-                <p><strong>Laptáblák:</strong> BG Unique, BG Unique HUN, BG ALL Coupons, Geekbuying, Geekbuying Unique</p>
-                <span className="badge-status online">[OK] Aktív Szinkron</span>
+                <h3>Google Sheets Élő Szinkron</h3>
+                <p><strong>Spreadsheet ID:</strong> <code>1qw3IXBpWlRx-ZFSueFaiPfA44lpMd1b5-MhnSIRwzMc</code></p>
+                <p><strong>Beolvasott Laptáblák:</strong></p>
+                <ul>
+                  <li>BG Unique</li>
+                  <li>BG Unique HUN</li>
+                  <li>BG ALL Coupons</li>
+                  <li>Geekbuying</li>
+                  <li>Geekbuying Unique</li>
+                </ul>
+                <p style={{marginTop: '0.5rem'}}><strong>Összes beolvasott élő kupon:</strong> {coupons.length} db</p>
+                <span className="badge-status online">[OK] Élő Adatfolyam Csatlakoztatva</span>
               </div>
 
               <div className="feed-card">
                 <h3>Banggood Affiliate API</h3>
-                <p><strong>API végpont:</strong> <code>https://affapi.banggood.com/coupon/list</code></p>
-                <p><strong>Frissítés:</strong> Automatic 15 percenként</p>
-                <span className="badge-status online">[OK] API Csatlakoztatva</span>
+                <p><strong>API kódok:</strong> Netlify & Backend szinkronizált</p>
+                <p><strong>Frissítés:</strong> Google Sheets automatikus szinkronizáció</p>
+                <span className="badge-status online">[OK] Csatlakoztatva</span>
               </div>
             </div>
           </div>

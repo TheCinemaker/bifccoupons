@@ -1,33 +1,74 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useLayoutEffect, useCallback } from 'react';
 import './Coupons.css';
 import CouponGrid from './components/CouponGrid';
 import DealStudio from './components/DealStudio';
 import ReviewsPage from './components/ReviewsPage';
 import AdminModal from './components/AdminModal';
 
-const DarkModeToggle = () => {
-  const [darkMode, setDarkMode] = useState(true);
+/* ============================================================
+   Ikonok (inline SVG — nincs külső függőség, öröklik a színt)
+   ============================================================ */
 
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-    document.body.classList.toggle('light-mode', darkMode);
-    localStorage.setItem('darkMode', !darkMode ? 'enabled' : 'disabled');
-  };
+const IconSun = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    strokeLinecap="round" strokeLinejoin="round" className="theme-icon" aria-hidden="true">
+    <circle cx="12" cy="12" r="4.2" />
+    <path d="M12 2.6v2M12 19.4v2M2.6 12h2M19.4 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4" />
+  </svg>
+);
 
-  useEffect(() => {
-    const savedMode = localStorage.getItem('darkMode');
-    if (savedMode === 'disabled') {
-      setDarkMode(false);
-      document.body.classList.add('light-mode');
-    }
-  }, []);
+const IconMoon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    strokeLinecap="round" strokeLinejoin="round" className="theme-icon" aria-hidden="true">
+    <path d="M20.5 14.3A8.6 8.6 0 1 1 9.7 3.5a6.9 6.9 0 0 0 10.8 10.8z" />
+  </svg>
+);
 
-  return (
-    <button onClick={toggleDarkMode} className="btn-mac btn-mac-secondary dark-toggle-btn">
-      {darkMode ? 'Világos mód' : 'Sötét mód'}
-    </button>
-  );
+const IconArrowUp = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 19V5M5 12l7-7 7 7" />
+  </svg>
+);
+
+/* ============================================================
+   Téma: rendszerbeállítás -> localStorage -> data-theme a <html>-en
+   ============================================================ */
+
+const readInitialTheme = () => {
+  try {
+    const saved = window.localStorage.getItem('kvm-theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch (e) {
+    /* privát mód: elnyeljük */
+  }
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+    return 'light';
+  }
+  return 'dark';
 };
+
+const applyTheme = (theme) => {
+  document.documentElement.setAttribute('data-theme', theme);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'light' ? '#fafafc' : '#101114');
+};
+
+const ThemeToggle = ({ theme, onToggle }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    className="icon-btn theme-toggle"
+    title={theme === 'dark' ? 'Váltás világos módra' : 'Váltás sötét módra'}
+    aria-label={theme === 'dark' ? 'Váltás világos módra' : 'Váltás sötét módra'}
+  >
+    {theme === 'dark' ? <IconSun /> : <IconMoon />}
+  </button>
+);
+
+/* ============================================================
+   Google Sheets betöltés
+   ============================================================ */
 
 const SPREADSHEET_ID = '1qw3IXBpWlRx-ZFSueFaiPfA44lpMd1b5-MhnSIRwzMc';
 const SHEET_NAMES = ['BG Unique', 'BG Unique HUN', 'BANGGOODAPI', 'ALIEXPRESSAPI', 'Geekbuying', 'Geekbuying Unique'];
@@ -88,6 +129,10 @@ async function fetchLiveGoogleSheet(sheetName) {
   }).filter(item => item.name && item.link);
 }
 
+/* ============================================================
+   App
+   ============================================================ */
+
 function App() {
   const [coupons, setCoupons] = useState([]);
   const [activeTab, setActiveTab] = useState('coupons');
@@ -100,31 +145,187 @@ function App() {
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Lusta inicializálás: az ikon már az első rendernél a helyes állapotot mutatja
+  const [theme, setTheme] = useState(readInitialTheme);
+  const [isCondensed, setIsCondensed] = useState(false);
+  const [showToTop, setShowToTop] = useState(false);
+  const [isPressingBrand, setIsPressingBrand] = useState(false);
+
   const pressTimerRef = useRef(null);
+  const segRef = useRef(null);
+  const thumbRef = useRef(null);
+  const headerRef = useRef(null);
+  const progressRef = useRef(null);
+  const tabRefs = useRef({});
+
+  /* ---------- Téma ---------- */
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  /* ---------- Fejlécmagasság -> CSS változó ----------
+     A fejléc görgetéskor összemegy, ezért a magassága nem konstans.
+     A ragadós eszköztár és a mobil menü ehhez igazodik, így muszáj mérni. */
+
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return undefined;
+
+    const sync = () => {
+      const h = Math.round(el.getBoundingClientRect().height);
+      if (h > 0) document.documentElement.style.setProperty('--header-h', `${h}px`);
+    };
+
+    sync();
+
+    if (typeof window.ResizeObserver === 'function') {
+      const ro = new window.ResizeObserver(sync);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+
+    window.addEventListener('resize', sync);
+    return () => window.removeEventListener('resize', sync);
+  }, []);
+
+  // A be-/kicsukódás animált, a végállapotot utólag is le kell mérni
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return undefined;
+    const t = setTimeout(() => {
+      const h = Math.round(el.getBoundingClientRect().height);
+      if (h > 0) document.documentElement.style.setProperty('--header-h', `${h}px`);
+    }, 460);
+    return () => clearTimeout(t);
+  }, [isCondensed, isAdmin]);
+
+  const toggleTheme = () => {
+    setTheme(prev => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      try {
+        window.localStorage.setItem('kvm-theme', next);
+      } catch (e) {
+        /* privát mód: a téma a munkamenetre marad meg */
+      }
+      return next;
+    });
+  };
+
+  /* ---------- Görgetés: fejléc összehúzás + haladásjelző ---------- */
+
+  useEffect(() => {
+    let ticking = false;
+
+    const measure = () => {
+      const doc = document.documentElement;
+      const y = window.pageYOffset || doc.scrollTop || 0;
+
+      // Hiszterézis, hogy a határon ne villogjon a fejléc
+      setIsCondensed(prev => (prev ? y > 12 : y > 40));
+      setShowToTop(y > 600);
+
+      // A haladásjelzőt közvetlenül a DOM-ra írjuk: state-ben minden
+      // görgetési frame újrarenderelné a több száz kuponkártyát.
+      if (progressRef.current) {
+        const max = doc.scrollHeight - window.innerHeight;
+        const ratio = max > 0 ? Math.min(1, Math.max(0, y / max)) : 0;
+        progressRef.current.style.transform = `scaleX(${ratio})`;
+      }
+
+      ticking = false;
+    };
+
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(measure);
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    measure();
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, []);
+
+  /* ---------- Admin: cím nyomvatartása ---------- */
 
   const startPressTimer = () => {
+    if (isAdmin) return;
+    setIsPressingBrand(true);
     pressTimerRef.current = setTimeout(() => {
-      if (!isAdmin) {
-        setIsAdminModalOpen(true);
-      }
-    }, 3000); // 3-second hold to open admin PIN modal
+      setIsPressingBrand(false);
+      setIsAdminModalOpen(true);
+    }, 3000);
   };
 
   const cancelPressTimer = () => {
+    setIsPressingBrand(false);
     if (pressTimerRef.current) {
       clearTimeout(pressTimerRef.current);
       pressTimerRef.current = null;
     }
   };
 
+  useEffect(() => () => {
+    if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+  }, []);
+
+  /* ---------- Navigáció ---------- */
+
+  const TABS = [
+    { id: 'coupons', label: 'Kínálat', count: coupons.length },
+    { id: 'reviews', label: 'Tesztek & Unboxing' }
+  ];
+
+  if (isAdmin) {
+    TABS.push({ id: 'studio', label: 'Deal Studio', admin: true });
+    TABS.push({ id: 'feeds', label: 'Live Feeds', admin: true });
+  }
+
   const switchTab = (tab) => {
     setActiveTab(tab);
     setMobileMenuOpen(false);
   };
 
+  /* ---------- Szegmentált vezérlő csúszó indikátora ---------- */
+
+  const positionThumb = useCallback(() => {
+    const seg = segRef.current;
+    const thumb = thumbRef.current;
+    const btn = tabRefs.current[activeTab];
+    if (!seg || !thumb || !btn) return;
+
+    const segBox = seg.getBoundingClientRect();
+    const btnBox = btn.getBoundingClientRect();
+    if (btnBox.width === 0) return;
+
+    thumb.style.width = `${btnBox.width}px`;
+    thumb.style.transform = `translateX(${btnBox.left - segBox.left}px)`;
+    thumb.classList.add('is-ready');
+    seg.classList.add('has-thumb');
+  }, [activeTab]);
+
+  useLayoutEffect(() => {
+    positionThumb();
+    // A webfont betöltése után változhat a gombszélesség
+    const t = setTimeout(positionThumb, 260);
+    window.addEventListener('resize', positionThumb);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', positionThumb);
+    };
+  }, [positionThumb, isAdmin, coupons.length]);
+
+  /* ---------- Adatbetöltés ---------- */
+
   useEffect(() => {
     let isMounted = true;
-    
+
     async function loadAllLiveSheets() {
       try {
         setApiStatus({ loading: true, error: null });
@@ -160,20 +361,30 @@ function App() {
     return () => { isMounted = false; };
   }, []);
 
+  /* ---------- Mobil menü: ESC + görgetészár ---------- */
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mobileMenuOpen]);
+
+  /* ---------- Kezelők ---------- */
+
   const handleSendToStudio = (coupon) => {
     setSelectedDealForStudio(coupon);
     setActiveTab('studio');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleAdminClick = () => {
-    if (isAdmin) {
-      setIsAdmin(false);
-      if (activeTab === 'studio' || activeTab === 'feeds') {
-        setActiveTab('coupons');
-      }
-    } else {
-      setIsAdminModalOpen(true);
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    setMobileMenuOpen(false);
+    if (activeTab === 'studio' || activeTab === 'feeds') {
+      setActiveTab('coupons');
     }
   };
 
@@ -182,101 +393,135 @@ function App() {
     setIsAdminModalOpen(false);
   };
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
-    <div className="app-container">
-      <header className="main-header">
-        <div className="header-top-row">
-          <div 
-            className="logo-brand clickable-brand"
-            onMouseDown={startPressTimer}
-            onMouseUp={cancelPressTimer}
-            onMouseLeave={cancelPressTimer}
-            onTouchStart={startPressTimer}
-            onTouchEnd={cancelPressTimer}
-            onClick={(e) => {
-              // Triple click fallback
-              if (e.detail === 3 && !isAdmin) {
-                setIsAdminModalOpen(true);
-              }
-            }}
-            title="Tartsd nyomva 3 másodpercig az Admin belépéshez"
-          >
-            <div>
-              <h1 className="brand-title">KINABOLVEDDMEG</h1>
-              <p className="brand-subtitle">BUYITFROMCHINA - PREMIUMLISZTALT KUPONOK ES AKCIOK</p>
-            </div>
+    <div className="app-root">
+      <header className={`site-header ${isCondensed ? 'is-condensed' : ''}`} ref={headerRef}>
+        <div className="header-inner">
+          <div className="window-dots" aria-hidden="true">
+            <span /><span /><span />
           </div>
 
-          <div className="header-right-controls">
-            <DarkModeToggle />
+          <div className={`brand-wrap ${isPressingBrand ? 'is-pressing' : ''}`}>
+            <div
+              className="brand"
+              onMouseDown={startPressTimer}
+              onMouseUp={cancelPressTimer}
+              onMouseLeave={cancelPressTimer}
+              onTouchStart={startPressTimer}
+              onTouchEnd={cancelPressTimer}
+              onTouchCancel={cancelPressTimer}
+              onClick={(e) => {
+                if (e.detail === 3 && !isAdmin) setIsAdminModalOpen(true);
+              }}
+              title="Tartsd nyomva 3 másodpercig az admin belépéshez"
+            >
+              <h1 className="brand-title">KÍNÁBÓL VEDD MEG</h1>
+              <p className="brand-subtitle">BUYITFROMCHINA · PRÉMIUM KUPONOK ÉS AKCIÓK</p>
+            </div>
+            <span className="brand-hold-bar" />
+          </div>
+
+          <nav className="segmented" ref={segRef} aria-label="Fő navigáció">
+            <span className="segmented-thumb" ref={thumbRef} aria-hidden="true" />
+            {TABS.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                ref={el => { tabRefs.current[tab.id] = el; }}
+                className={`seg-btn ${activeTab === tab.id ? 'active' : ''} ${tab.admin ? 'admin-seg' : ''}`}
+                onClick={() => switchTab(tab.id)}
+                aria-current={activeTab === tab.id ? 'page' : undefined}
+              >
+                {tab.label}
+                {tab.count > 0 && <span className="seg-count">{tab.count}</span>}
+              </button>
+            ))}
+          </nav>
+
+          <div className="header-actions">
+            {isAdmin && (
+              <button
+                type="button"
+                className="btn-mac btn-mac-danger admin-exit"
+                onClick={handleAdminLogout}
+                title="Kilépés az admin módból"
+              >
+                Admin ki
+              </button>
+            )}
+
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+
             <button
+              type="button"
               className={`hamburger-btn ${mobileMenuOpen ? 'is-open' : ''}`}
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label="Menu"
+              aria-label="Menü"
+              aria-expanded={mobileMenuOpen}
             >
-              <span className="hamburger-bar"></span>
-              <span className="hamburger-bar"></span>
-              <span className="hamburger-bar"></span>
+              <span className="hamburger-bar" />
+              <span className="hamburger-bar" />
+              <span className="hamburger-bar" />
             </button>
           </div>
         </div>
 
-        <nav className={`nav-tabs ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-          <button 
-            className={`nav-tab ${activeTab === 'coupons' ? 'active' : ''}`}
-            onClick={() => switchTab('coupons')}
-          >
-            Kínálat ({coupons.length})
-          </button>
-          
-          <button 
-            className={`nav-tab ${activeTab === 'reviews' ? 'active' : ''}`}
-            onClick={() => switchTab('reviews')}
-          >
-            Tesztek & Unboxing
-          </button>
+        <span className="scroll-progress" ref={progressRef} aria-hidden="true" />
+      </header>
+
+      <div
+        className={`mobile-scrim ${mobileMenuOpen ? 'is-open' : ''}`}
+        onClick={() => setMobileMenuOpen(false)}
+        aria-hidden="true"
+      />
+
+      <div className={`mobile-sheet ${mobileMenuOpen ? 'is-open' : ''}`}>
+        <div className="mobile-sheet-inner">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`sheet-item ${activeTab === tab.id ? 'active' : ''} ${tab.admin ? 'admin-seg' : ''}`}
+              onClick={() => switchTab(tab.id)}
+            >
+              <span>{tab.label}</span>
+              {tab.count > 0 && <span className="seg-count">{tab.count}</span>}
+            </button>
+          ))}
 
           {isAdmin && (
             <>
-              <button 
-                className={`nav-tab admin-tab ${activeTab === 'studio' ? 'active' : ''}`}
-                onClick={() => switchTab('studio')}
-              >
-                Deal Studio
-              </button>
-              <button 
-                className={`nav-tab admin-tab ${activeTab === 'feeds' ? 'active' : ''}`}
-                onClick={() => switchTab('feeds')}
-              >
-                Live Feeds
-              </button>
-              <button 
-                className="nav-tab lock-tab logged-in"
-                onClick={() => { handleAdminClick(); setMobileMenuOpen(false); }}
-              >
-                Admin (Kijelentkezés)
+              <span className="sheet-sep" />
+              <button type="button" className="sheet-item danger" onClick={handleAdminLogout}>
+                <span>Admin kijelentkezés</span>
               </button>
             </>
           )}
-        </nav>
-      </header>
-
-      {apiStatus.loading && (
-        <div className="status-banner info">
-          <span>Élő kuponok betöltése a táblázatból...</span>
         </div>
-      )}
-
-      {apiStatus.error && !apiStatus.loading && (
-        <div className="status-banner error">
-          <span>[INFO] {apiStatus.error}</span>
-        </div>
-      )}
+      </div>
 
       <main className="main-content">
+        {apiStatus.loading && (
+          <div className="status-banner info">
+            <span className="spinner" />
+            <span>Élő kuponok betöltése a táblázatból…</span>
+          </div>
+        )}
+
+        {apiStatus.error && !apiStatus.loading && (
+          <div className="status-banner error">
+            <span>{apiStatus.error}</span>
+          </div>
+        )}
+
         {activeTab === 'coupons' && (
-          <CouponGrid 
+          <CouponGrid
             coupons={coupons}
+            loading={apiStatus.loading}
             activeSheet={activeSheet}
             setActiveSheet={setActiveSheet}
             searchTerm={searchTerm}
@@ -286,23 +531,21 @@ function App() {
           />
         )}
 
-        {activeTab === 'reviews' && (
-          <ReviewsPage isAdmin={isAdmin} />
-        )}
+        {activeTab === 'reviews' && <ReviewsPage isAdmin={isAdmin} />}
 
         {isAdmin && activeTab === 'studio' && (
           <DealStudio initialDeal={selectedDealForStudio} availableCoupons={coupons} />
         )}
 
         {isAdmin && activeTab === 'feeds' && (
-          <div className="feeds-section mac-card">
-            <h3>ÉLŐ ADATCSATORNÁK ÉS ÁLLAPOT</h3>
-            <p>Google Sheets Táblázat ID: <code>{SPREADSHEET_ID}</code></p>
+          <div className="feeds-section">
+            <h3>Élő adatcsatornák és állapot</h3>
+            <p>Google Sheets táblázat ID: <code>{SPREADSHEET_ID}</code></p>
             <div className="feeds-list">
               {SHEET_NAMES.map(name => (
                 <div key={name} className="feed-item">
                   <span className="feed-name">{name}</span>
-                  <span className="feed-status active">Aktív Szinkron</span>
+                  <span className="feed-status active">Aktív szinkron</span>
                 </div>
               ))}
             </div>
@@ -310,7 +553,17 @@ function App() {
         )}
       </main>
 
-      <AdminModal 
+      <button
+        type="button"
+        className={`to-top ${showToTop ? 'is-visible' : ''}`}
+        onClick={scrollToTop}
+        aria-label="Vissza a lap tetejére"
+        title="Vissza a tetejére"
+      >
+        <IconArrowUp />
+      </button>
+
+      <AdminModal
         isOpen={isAdminModalOpen}
         onClose={() => setIsAdminModalOpen(false)}
         onSuccess={handleAdminSuccess}

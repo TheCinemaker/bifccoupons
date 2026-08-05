@@ -1,64 +1,61 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hu">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="referrer" content="no-referrer" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="description" content="Buyitfromchina kuponkereső - A legjobb kuponok egy helyen">
-    <meta name="keywords" content="kuponok, akciók, kedvezmény, banggood, aliexpress, geekbuying, gshopper">
-    <meta name="robots" content="index, follow">
-    <meta property="og:title" content="Kuponkereső App">
-    <meta property="og:description" content="A legjobb kuponokat keresheted az oldalunkon">
-    <meta property="og:image" content="URL_to_some_image">
+    <meta name="theme-color" content="#101114" />
 
-    <!-- Google Tag Manager, csak beleegyezés után töltődik be -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YXHGD0P262"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-YXHGD0P262');
-</script>
-    
-    <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="Web site created using create-react-app"
-    />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://docs.google.com" />
+
+    <meta name="description" content="KÍNÁBÓL VEDD MEG — Banggood, AliExpress és Geekbuying kuponok, akciók egy helyen, élő frissítéssel." />
+    <meta name="keywords" content="kuponok, akciók, kedvezmény, banggood, aliexpress, geekbuying, gshopper" />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="KÍNÁBÓL VEDD MEG — Kuponkereső" />
+    <meta property="og:description" content="A legjobb Banggood, AliExpress és Geekbuying kuponok egy helyen." />
+    <meta property="og:image" content="%PUBLIC_URL%/logo512.png" />
+
+    <!--
+      Téma beállítása MÉG a React betöltése előtt.
+      Enélkül a mentett világos mód esetén egy pillanatra felvillanna a sötét háttér.
     -->
-    <title>BIFC - Couponfinder</title>
+    <script>
+      (function () {
+        try {
+          var saved = window.localStorage.getItem('kvm-theme');
+          var theme = (saved === 'light' || saved === 'dark')
+            ? saved
+            : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.style.backgroundColor = theme === 'light' ? '#f0f0f3' : '#08090b';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', theme === 'light' ? '#fafafc' : '#101114');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YXHGD0P262"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YXHGD0P262');
+    </script>
+
+    <title>KÍNÁBÓL VEDD MEG — Kuponkereső</title>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>Az alkalmazás futtatásához engedélyezned kell a JavaScriptet.</noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
   </body>
 </html>

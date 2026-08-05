@@ -88,12 +88,16 @@ const ReviewsPage = ({ isAdmin }) => {
   return (
     <div className="reviews-page">
       <div className="reviews-header-banner">
-        <h2>TESZTEK ÉS UNBOXING ANYAGOK</h2>
-        <p>Saját tapasztalatok, tesztek és kicsomagoló videók/leírások a KÍNÁBÓL VEDD MEG csapatától.</p>
-        
+        <h2>Tesztek és unboxing anyagok</h2>
+        <p>Saját tapasztalatok, tesztek és kicsomagoló leírások a KÍNÁBÓL VEDD MEG csapatától.</p>
+
         {isAdmin && (
-          <button className="btn-mac btn-mac-primary" onClick={() => setIsFormOpen(true)} style={{ marginTop: '1rem' }}>
-            Új Teszt / Unboxing Hozzáadása
+          <button
+            type="button"
+            className="btn-mac btn-mac-primary mt-16"
+            onClick={() => setIsFormOpen(true)}
+          >
+            Új teszt / unboxing hozzáadása
           </button>
         )}
       </div>
@@ -102,8 +106,10 @@ const ReviewsPage = ({ isAdmin }) => {
         <div className="modal-overlay" onClick={() => setIsFormOpen(false)}>
           <div className="admin-modal-card review-form-card" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>ÚJ TESZT / UNBOXING LEÍRÁS</h3>
-              <button className="modal-close" onClick={() => setIsFormOpen(false)}>&times;</button>
+              <h3>Új teszt / unboxing leírás</h3>
+              <button type="button" className="modal-close" onClick={() => setIsFormOpen(false)} aria-label="Bezárás">
+                &times;
+              </button>
             </div>
 
             <form onSubmit={handleAddReview} className="admin-form">
@@ -204,13 +210,26 @@ const ReviewsPage = ({ isAdmin }) => {
       )}
 
       <div className="reviews-grid">
+        {reviews.length === 0 && (
+          <div className="empty-state">
+            <h4>Még nincs feltöltött teszt</h4>
+            <p>Amint elkészül az első unboxing vagy termékteszt, itt fog megjelenni.</p>
+          </div>
+        )}
+
         {reviews.map(review => (
           <div key={review.id} className="review-card">
             <div className="review-image-wrapper">
-              <img src={review.image} alt={review.title} className="review-image" />
+              <img src={review.image} alt={review.title} className="review-image" loading="lazy" />
               <span className="badge-category">{review.category}</span>
               {isAdmin && (
-                <button className="btn-delete-review" onClick={() => handleDeleteReview(review.id)} title="Törlés">
+                <button
+                  type="button"
+                  className="btn-delete-review"
+                  onClick={() => handleDeleteReview(review.id)}
+                  title="Törlés"
+                  aria-label="Teszt törlése"
+                >
                   &times;
                 </button>
               )}

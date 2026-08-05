@@ -338,21 +338,22 @@ ${deal.link || ''}`;
   return (
     <div className="deal-studio-container">
       <div className="studio-header">
-        <h2>Facebook Poszt & Komment Generalo Studio</h2>
-        <p>Valassz terméket boltonkent szurve, majd masold ki a posztszoveget, az elso kommentet es a kepet!</p>
+        <h2>Facebook poszt &amp; komment generáló</h2>
+        <p>Válassz terméket boltonként szűrve, majd másold ki a posztszöveget, az első kommentet és a képet.</p>
       </div>
 
       {/* Product Picker with Store Filter Tabs */}
       {availableCoupons.length > 0 && (
         <div className="studio-picker-section">
-          <h3>Termek kivalasztasa ({filteredCoupons.length} db)</h3>
+          <h3>Termék kiválasztása ({filteredCoupons.length} db)</h3>
 
           {/* Store filter pills */}
-          <div className="tabs-scroll-wrapper" style={{marginTop: '0.75rem'}}>
+          <div className="tabs-scroll-wrapper mt-12">
             <div className="tabs-container">
               {STORE_FILTERS.map(f => (
                 <button
                   key={f.label}
+                  type="button"
                   className={`tab-pill ${f.label === storeFilter ? 'active' : ''}`}
                   onClick={() => setStoreFilter(f.label)}
                 >
@@ -363,16 +364,23 @@ ${deal.link || ''}`;
           </div>
 
           {/* Search within filtered */}
-          <div className="search-wrapper" style={{marginTop: '0.75rem'}}>
+          <div className="search-wrapper mt-12">
+            <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" />
+            </svg>
             <input
-              type="text"
-              placeholder="Kereses termeknevre vagy kuponkodra..."
+              type="search"
+              placeholder="Keresés terméknévre vagy kuponkódra…"
               value={pickerSearch}
               onChange={e => setPickerSearch(e.target.value)}
               className="mac-input"
             />
             {pickerSearch && (
-              <span className="clear-icon" onClick={() => setPickerSearch('')}>x</span>
+              <button type="button" className="clear-icon" onClick={() => setPickerSearch('')} aria-label="Törlés">
+                &times;
+              </button>
             )}
           </div>
 
@@ -411,19 +419,17 @@ ${deal.link || ''}`;
               );
             })}
             {visibleCoupons.length === 0 && (
-              <div style={{padding: '1.5rem', textAlign: 'center', color: 'var(--mac-text-muted)'}}>
-                Nincs talalat a megadott szurokkel.
-              </div>
+              <div className="studio-empty">Nincs találat a megadott szűrőkkel.</div>
             )}
           </div>
 
           {pickerPage < filteredCoupons.length && (
             <button
-              className="btn-mac btn-mac-secondary"
-              style={{width: '100%', marginTop: '0.75rem'}}
+              type="button"
+              className="btn-mac btn-mac-secondary w-full mt-12"
               onClick={() => setPickerPage(p => p + 20)}
             >
-              Tovabbiak betoltese ({filteredCoupons.length - pickerPage} maradt)
+              További termékek betöltése ({filteredCoupons.length - pickerPage} maradt)
             </button>
           )}
         </div>
@@ -433,10 +439,10 @@ ${deal.link || ''}`;
       <div className="studio-layout" id="studio-editor">
         {/* Left column: Text editor */}
         <div className="studio-panel">
-          <h3>FB Poszt & Elso Komment Adatok</h3>
+          <h3>FB poszt &amp; első komment adatai</h3>
 
           <div className="form-group">
-            <label className="form-label">Termek Neve:</label>
+            <label className="form-label">Termék neve</label>
             <input
               type="text"
               className="mac-input"
@@ -447,7 +453,7 @@ ${deal.link || ''}`;
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Kuponos Ar:</label>
+              <label className="form-label">Kuponos ár</label>
               <input
                 type="text"
                 className="mac-input"
@@ -456,7 +462,7 @@ ${deal.link || ''}`;
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Kuponkod:</label>
+              <label className="form-label">Kuponkód</label>
               <input
                 type="text"
                 className="mac-input"
@@ -468,7 +474,7 @@ ${deal.link || ''}`;
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Raktar:</label>
+              <label className="form-label">Raktár</label>
               <input
                 type="text"
                 className="mac-input"
@@ -477,7 +483,7 @@ ${deal.link || ''}`;
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Bolt:</label>
+              <label className="form-label">Bolt</label>
               <input
                 type="text"
                 className="mac-input"
@@ -488,7 +494,7 @@ ${deal.link || ''}`;
           </div>
 
           <div className="form-group">
-            <label className="form-label">Vasarlasi Link (Elso kommentbe):</label>
+            <label className="form-label">Vásárlási link (első kommentbe)</label>
             <input
               type="text"
               className="mac-input"
@@ -498,7 +504,7 @@ ${deal.link || ''}`;
           </div>
 
           <div className="form-group">
-            <label className="form-label">Kep URL (A oszlopbol automatikusan):</label>
+            <label className="form-label">Kép URL (az A oszlopból automatikusan)</label>
             <input
               type="text"
               className="mac-input"
@@ -508,68 +514,68 @@ ${deal.link || ''}`;
           </div>
 
           {/* Post text area */}
-          <div className="form-group" style={{marginTop: '1.25rem'}}>
-            <label className="form-label">Fo Facebook Posztszoveg (Kep melle):</label>
+          <div className="form-group mt-16">
+            <label className="form-label">Fő Facebook posztszöveg (a kép mellé)</label>
             <textarea
               className="mac-input"
               value={postText}
               readOnly
               rows={6}
-              style={{resize: 'none'}}
             />
             <button
-              className={`btn-mac ${copyPostSuccess ? 'btn-mac-primary' : 'btn-mac-secondary'}`}
+              type="button"
+              className={`btn-mac w-full mt-12 ${copyPostSuccess ? 'btn-mac-primary' : 'btn-mac-secondary'}`}
               onClick={handleCopyPost}
-              style={{width: '100%', marginTop: '0.5rem'}}
             >
-              {copyPostSuccess ? '[OK] Fo Posztszoveg Masolva!' : 'Fo Posztszoveg Masolasa'}
+              {copyPostSuccess ? 'Posztszöveg másolva' : 'Fő posztszöveg másolása'}
             </button>
           </div>
 
           {/* First comment area */}
-          <div className="form-group" style={{marginTop: '1.25rem'}}>
-            <label className="form-label">Elso Komment Szovege (Kozvetlen Vasarlasi Link):</label>
+          <div className="form-group mt-16">
+            <label className="form-label">Első komment (közvetlen vásárlási link)</label>
             <textarea
               className="mac-input"
               value={commentText}
               readOnly
               rows={3}
-              style={{resize: 'none'}}
             />
             <button
-              className={`btn-mac ${copyCommentSuccess ? 'btn-mac-primary' : 'btn-mac-secondary'}`}
+              type="button"
+              className={`btn-mac w-full mt-12 ${copyCommentSuccess ? 'btn-mac-primary' : 'btn-mac-secondary'}`}
               onClick={handleCopyComment}
-              style={{width: '100%', marginTop: '0.5rem'}}
             >
-              {copyCommentSuccess ? '[OK] Elso Komment Masolva!' : 'Elso Komment Masolasa'}
+              {copyCommentSuccess ? 'Komment másolva' : 'Első komment másolása'}
             </button>
           </div>
         </div>
 
         {/* Right column: Image generator */}
         <div className="studio-panel">
-          <h3>Posztolhato Termekkep</h3>
-          <p style={{fontSize: '0.85rem', color: 'var(--mac-text-muted)'}}>
-            A kep automatikusan az A oszlopbol (image) toltodik be. Toltsd le vagy masold!
+          <h3>Posztolható termékkép</h3>
+          <p className="studio-hint">
+            A kép automatikusan az A oszlopból (image) töltődik be. Töltsd le vagy másold a vágólapra.
           </p>
 
-          <div className="canvas-preview-container" style={{marginTop: '1rem'}}>
+          <div className="canvas-preview-container mt-12">
             <canvas ref={canvasRef} />
           </div>
 
-          <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.25rem'}}>
+          <div className="stack-8 mt-16">
             <button
+              type="button"
               className={`btn-mac ${copyImageSuccess ? 'btn-mac-primary' : 'btn-mac-secondary'}`}
               onClick={handleCopyImageToClipboard}
             >
-              {copyImageSuccess ? '[OK] Kep Masolva Vagolapra!' : 'Kep Masolasa Vagolapra'}
+              {copyImageSuccess ? 'Kép a vágólapon' : 'Kép másolása vágólapra'}
             </button>
 
             <button
+              type="button"
               className="btn-mac btn-mac-secondary"
               onClick={handleDownloadImage}
             >
-              Kep Letoltese HD PNG-ben
+              Kép letöltése HD PNG-ben
             </button>
           </div>
         </div>

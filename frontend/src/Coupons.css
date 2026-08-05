@@ -1,571 +1,1660 @@
-/* KÍNÁBÓL VEDD MEG - Apple macOS & Fully Responsive Mobile Design System */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+/* ============================================================================
+   KÍNÁBÓL VEDD MEG — macOS-inspired design system
+   ----------------------------------------------------------------------------
+   Alapelvek:
+   - Szűk, precíz sarkok (4–14px). Semmi 999px pill, semmi lekerekített "buborék".
+   - Hairline keretek + belső fény-él (inset highlight), mint az AppKit kontrollokon.
+   - Vibrancy: blur + saturate(180%) — ettől lesz "mac" érzete a sávoknak.
+   - MINDEN felület token-vezérelt: a világos és sötét mód külön kalibrálva.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ============================================================
+   1. DESIGN TOKENEK — SÖTÉT MÓD (alapértelmezett)
+   ============================================================ */
 
 :root {
-  --mac-bg-dark: #0b0c10;
-  --mac-bg-card: rgba(22, 24, 30, 0.78);
-  --mac-bg-card-hover: rgba(32, 35, 45, 0.92);
-  --mac-border: rgba(255, 255, 255, 0.08);
-  --mac-border-hover: rgba(255, 255, 255, 0.2);
-  --mac-accent-blue: #3b82f6;
-  --mac-accent-cyan: #06b6d4;
-  --mac-accent-gold: #f59e0b;
-  --mac-accent-green: #10b981;
-  --mac-accent-red: #ef4444;
-  --mac-text-primary: #f3f4f6;
-  --mac-text-secondary: #9ca3af;
-  --mac-text-muted: #6b7280;
-  --mac-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
-  --mac-radius-xl: 20px;
-  --mac-radius-lg: 16px;
-  --mac-radius-md: 12px;
-  --mac-radius-sm: 8px;
+  color-scheme: dark;
+
+  /* --- Felületek --- */
+  --bg: #08090b;
+  --bg-tint-a: rgba(10, 132, 255, 0.10);
+  --bg-tint-b: rgba(100, 210, 255, 0.06);
+  --surface: #131417;
+  --surface-2: #191b20;
+  --surface-3: #212429;
+  --chrome: rgba(16, 17, 20, 0.72);
+  --chrome-solid: #101114;
+  --well: rgba(0, 0, 0, 0.32);
+  --fill: rgba(255, 255, 255, 0.07);
+  --fill-hover: rgba(255, 255, 255, 0.12);
+  --fill-strong: rgba(255, 255, 255, 0.16);
+  --skeleton: rgba(255, 255, 255, 0.05);
+  --skeleton-sheen: rgba(255, 255, 255, 0.09);
+
+  /* --- Vonalak --- */
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --separator: rgba(255, 255, 255, 0.07);
+  --edge-light: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+  /* --- Szöveg (kontrasztra kalibrálva sötét háttéren) --- */
+  --text: #f5f5f7;
+  --text-2: #b6b6bd;
+  --text-3: #8a8a91;
+  --on-accent: #ffffff;
+
+  /* --- Akcentek (Apple rendszerszínek, sötét variáns) --- */
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-soft: rgba(10, 132, 255, 0.18);
+  --accent-line: rgba(10, 132, 255, 0.42);
+  --green: #30d158;
+  --green-soft: rgba(48, 209, 88, 0.16);
+  --green-line: rgba(48, 209, 88, 0.36);
+  --price: #ffd60a;
+  --orange: #ff9f0a;
+  --orange-soft: rgba(255, 159, 10, 0.14);
+  --orange-line: rgba(255, 159, 10, 0.34);
+  --red: #ff453a;
+  --red-soft: rgba(255, 69, 58, 0.16);
+  --red-line: rgba(255, 69, 58, 0.38);
+  --code: #64d2ff;
+  --code-soft: rgba(100, 210, 255, 0.12);
+  --code-line: rgba(100, 210, 255, 0.30);
+
+  /* --- Árnyékok (rétegzett, mint a macOS ablakoknál) --- */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.40), 0 8px 22px rgba(0, 0, 0, 0.34);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.52), 0 32px 72px rgba(0, 0, 0, 0.46);
+  --shadow-knob: 0 1px 1px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
+
+  /* --- Sugarak: szándékosan szűkek --- */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+
+  /* --- Mozgás --- */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1: 0.14s;
+  --dur-2: 0.22s;
+  --dur-3: 0.42s;
+
+  /* --- Layout --- */
+  --header-h: 74px;
+  --gutter: 20px;
+  --maxw: 1440px;
+  --ring: 0 0 0 3px rgba(10, 132, 255, 0.45);
+
+  /* --- Legacy aliasok (régi osztályok ne törjenek el) --- */
+  --mac-text-primary: var(--text);
+  --mac-text-secondary: var(--text-2);
+  --mac-text-muted: var(--text-3);
+  --mac-accent-blue: var(--accent);
+  --mac-accent-cyan: var(--code);
+  --mac-accent-gold: var(--price);
+  --mac-accent-green: var(--green);
+  --mac-accent-red: var(--red);
+  --mac-border: var(--border);
 }
 
-body.light-mode {
-  --mac-bg-dark: #f3f4f6;
-  --mac-bg-card: rgba(255, 255, 255, 0.88);
-  --mac-bg-card-hover: #ffffff;
-  --mac-border: rgba(0, 0, 0, 0.08);
-  --mac-border-hover: rgba(0, 0, 0, 0.18);
-  --mac-text-primary: #111827;
-  --mac-text-secondary: #4b5563;
-  --mac-text-muted: #6b7280;
-  --mac-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+/* ============================================================
+   2. VILÁGOS MÓD — nem invertálás, külön kalibráció
+   ============================================================ */
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f0f0f3;
+  --bg-tint-a: rgba(0, 122, 255, 0.07);
+  --bg-tint-b: rgba(88, 86, 214, 0.05);
+  --surface: #ffffff;
+  --surface-2: #ffffff;
+  --surface-3: #ffffff;
+  --chrome: rgba(250, 250, 252, 0.78);
+  --chrome-solid: #fafafc;
+  --well: rgba(0, 0, 0, 0.045);
+  --fill: rgba(0, 0, 0, 0.05);
+  --fill-hover: rgba(0, 0, 0, 0.09);
+  --fill-strong: rgba(0, 0, 0, 0.13);
+  --skeleton: rgba(0, 0, 0, 0.05);
+  --skeleton-sheen: rgba(0, 0, 0, 0.02);
+
+  --border: rgba(0, 0, 0, 0.11);
+  --border-strong: rgba(0, 0, 0, 0.26);
+  --separator: rgba(0, 0, 0, 0.08);
+  --edge-light: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  /* 1d1d1f / 4b4b50 / 6e6e73 — mind >4.5:1 a fehér felületen */
+  --text: #1d1d1f;
+  --text-2: #4b4b50;
+  --text-3: #6e6e73;
+  --on-accent: #ffffff;
+
+  --accent: #0066d6;
+  --accent-hover: #0055b3;
+  --accent-soft: rgba(0, 102, 214, 0.10);
+  --accent-line: rgba(0, 102, 214, 0.30);
+  --green: #0f7a3d;
+  --green-soft: rgba(15, 122, 61, 0.10);
+  --green-line: rgba(15, 122, 61, 0.28);
+  --price: #9a5600;
+  --orange: #a35a00;
+  --orange-soft: rgba(163, 90, 0, 0.10);
+  --orange-line: rgba(163, 90, 0, 0.28);
+  --red: #c22d20;
+  --red-soft: rgba(194, 45, 32, 0.09);
+  --red-line: rgba(194, 45, 32, 0.28);
+  --code: #036387;
+  --code-soft: rgba(3, 99, 135, 0.09);
+  --code-line: rgba(3, 99, 135, 0.26);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-2: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(0, 0, 0, 0.07);
+  --shadow-3: 0 10px 30px rgba(0, 0, 0, 0.13), 0 30px 64px rgba(0, 0, 0, 0.11);
+  --shadow-knob: 0 1px 1px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.10);
+
+  --ring: 0 0 0 3px rgba(0, 102, 214, 0.32);
 }
 
-* {
+/* ============================================================
+   3. RESET & ALAP
+   ============================================================ */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--header-h) + 16px);
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", sans-serif;
-  background-color: var(--mac-bg-dark);
-  background-image: 
-    radial-gradient(at 10% 0%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
-    radial-gradient(at 90% 100%, rgba(6, 182, 212, 0.1) 0px, transparent 50%),
-    radial-gradient(at 50% 50%, rgba(15, 17, 23, 0.5) 0px, transparent 50%);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+    'Inter', 'Segoe UI', sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'tnum';
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(90rem 50rem at 8% -12%, var(--bg-tint-a), transparent 60%),
+    radial-gradient(70rem 45rem at 105% 8%, var(--bg-tint-b), transparent 62%);
   background-attachment: fixed;
-  color: var(--mac-text-primary);
+  background-repeat: no-repeat;
+  color: var(--text);
   min-height: 100vh;
   line-height: 1.5;
+  letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color var(--dur-3) var(--ease), color var(--dur-3) var(--ease);
+}
+/* Megjegyzés: NINCS overflow-x: hidden a body-n — az elrontaná a
+   position: sticky-t (a body scroll-konténerré válna). A vízszintes
+   túlcsordulást a .tabs-scroll-wrapper maga kezeli. */
+
+img {
+  max-width: 100%;
+  display: block;
 }
 
-.app-container {
-  max-width: 1440px;
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Fókuszgyűrű csak billentyűzetes navigációnál */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A natív "x" a type=search mezőkben duplikálná a sajátunkat */
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Vékony, mac-szerű görgetősáv */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--fill-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--fill-strong);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--border-strong);
+}
+
+/* ============================================================
+   4. LAYOUT
+   ============================================================ */
+
+.app-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-container,
+.main-content {
+  width: 100%;
+  max-width: var(--maxw);
   margin: 0 auto;
-  padding: 1.25rem;
+  padding: 24px var(--gutter) 96px;
 }
 
-/* Header Navbar - Apple Glassmorphism */
-.main-header {
+.main-content {
+  padding-top: 16px;
+  flex: 1;
+}
+
+/* ============================================================
+   5. FEJLÉC — ragadós, görgetésre összehúzódó "titlebar + toolbar"
+   ============================================================ */
+
+.site-header {
   position: sticky;
-  top: 0.75rem;
-  z-index: 100;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  background: var(--mac-bg-card);
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-xl);
-  padding: 0.85rem 1.5rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.75rem;
-  box-shadow: var(--mac-shadow);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  gap: 1rem;
+  top: 0;
+  z-index: 200;
+  width: 100%;
+  background: transparent;
+  border-bottom: 1px solid transparent;
+  transition:
+    background-color var(--dur-3) var(--ease),
+    border-color var(--dur-3) var(--ease),
+    box-shadow var(--dur-3) var(--ease),
+    backdrop-filter var(--dur-3) var(--ease);
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
-.logo-brand {
+/* Görgetett állapot: vibrancy réteg + hairline elválasztó */
+.site-header.is-condensed {
+  background: var(--chrome);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-bottom-color: var(--separator);
+  box-shadow: var(--shadow-1);
+}
+
+/* Ha nincs backdrop-filter támogatás, tömör háttér, hogy olvasható maradjon */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site-header.is-condensed {
+    background: var(--chrome-solid);
+  }
+}
+
+.header-inner {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 14px var(--gutter);
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 16px;
+  transition: padding var(--dur-3) var(--ease);
+}
+
+.site-header.is-condensed .header-inner {
+  padding: 7px var(--gutter);
+}
+
+/* --- Ablak-pöttyök: a "mac ablak" szignál --- */
+.window-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
-  user-select: none;
-  cursor: pointer;
+  padding-right: 4px;
+  transition: opacity var(--dur-2) var(--ease), width var(--dur-3) var(--ease);
 }
 
-.logo-badge {
-  background: linear-gradient(135deg, #1e293b, #0f172a);
-  border: 1px solid var(--mac-border);
-  color: #ffffff;
-  padding: 0.45rem 0.75rem;
-  border-radius: var(--mac-radius-md);
-  font-size: 0.85rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  white-space: nowrap;
+.window-dots span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.22);
+}
+
+.window-dots span:nth-child(1) { background: #ff5f57; }
+.window-dots span:nth-child(2) { background: #febc2e; }
+.window-dots span:nth-child(3) { background: #28c840; }
+
+.site-header.is-condensed .window-dots span {
+  width: 10px;
+  height: 10px;
+}
+
+/* --- Márka --- */
+.brand-wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .brand-title {
-  font-size: 1.25rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: var(--mac-text-primary);
-  text-transform: uppercase;
-  margin: 0;
+  font-size: 1.06rem;
+  font-weight: 700;
+  letter-spacing: -0.014em;
+  line-height: 1.2;
+  color: var(--text);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: font-size var(--dur-3) var(--ease);
 }
 
+/* Az alcím görgetéskor összecsukódik — ettől lesz "vékony" a sáv */
 .brand-subtitle {
   font-size: 0.68rem;
-  color: var(--mac-text-secondary);
-  letter-spacing: 0.06em;
-  margin-top: 2px;
   font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 20px;
+  opacity: 1;
+  margin-top: 2px;
+  transition:
+    max-height var(--dur-3) var(--ease),
+    opacity var(--dur-2) var(--ease),
+    margin-top var(--dur-3) var(--ease);
 }
 
-.nav-tabs {
+.site-header.is-condensed .brand-title {
+  font-size: 0.94rem;
+}
+
+.site-header.is-condensed .brand-subtitle {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+}
+
+/* Admin nyomvatartás visszajelzése: a cím alatt betelik egy vékony sáv */
+.brand-wrap.is-pressing .brand-title {
+  opacity: 0.6;
+  transition: opacity 0.25s linear;
+}
+
+.brand-hold-bar {
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  height: 2px;
+  width: 0;
+  max-width: 180px;
+  background: linear-gradient(90deg, var(--accent), var(--code));
+  border-radius: 2px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.brand-wrap.is-pressing .brand-hold-bar {
+  width: 100%;
+  opacity: 1;
+  transition: width 3s linear, opacity 0.15s linear;
+}
+
+/* --- Jobb oldali vezérlők --- */
+.header-actions {
   display: flex;
   align-items: center;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 4px;
-  border-radius: 999px;
-  border: 1px solid var(--mac-border);
-  gap: 4px;
-  max-width: 100%;
-}
-
-.nav-tab {
-  background: transparent;
-  border: none;
-  color: var(--mac-text-secondary);
-  padding: 0.5rem 1.1rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  border-radius: 999px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  gap: 8px;
   flex-shrink: 0;
 }
 
-.nav-tab:hover {
-  color: var(--mac-text-primary);
-  background: rgba(255, 255, 255, 0.05);
+/* --- Görgetési haladásjelző a fejléc alsó élén --- */
+.scroll-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, var(--accent), var(--code));
+  opacity: 0;
+  transition: opacity var(--dur-2) var(--ease);
+  pointer-events: none;
 }
 
-.nav-tab.active {
-  background: var(--mac-accent-blue);
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+.site-header.is-condensed .scroll-progress {
+  opacity: 1;
 }
 
-.nav-tab.admin-tab {
-  border: 1px dashed rgba(245, 158, 11, 0.4);
+/* ============================================================
+   6. SZEGMENTÁLT VEZÉRLŐ (fő navigáció) — csúszó "knob"-bal
+   ============================================================ */
+
+.segmented {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
+  flex-shrink: 0;
 }
 
-.nav-tab.lock-tab {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--mac-border);
+.segmented-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: 0;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-knob), var(--edge-light);
+  opacity: 0;
+  transition:
+    transform var(--dur-2) var(--ease),
+    width var(--dur-2) var(--ease),
+    opacity var(--dur-1) linear;
+  pointer-events: none;
 }
 
-.nav-tab.lock-tab.logged-in {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border-color: rgba(239, 68, 68, 0.3);
+:root[data-theme='light'] .segmented-thumb {
+  background: #ffffff;
 }
 
-/* Status Banner */
-.status-banner {
-  padding: 0.85rem 1.5rem;
-  border-radius: var(--mac-radius-md);
-  font-size: 0.9rem;
+.segmented-thumb.is-ready {
+  opacity: 1;
+}
+
+.seg-btn {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease);
+}
+
+.seg-btn:hover {
+  color: var(--text);
+}
+
+.seg-btn.active {
+  color: var(--text);
+}
+
+/* Ha a knob nem mérhető (pl. régi böngésző), a gomb maga kap hátteret */
+.segmented:not(.has-thumb) .seg-btn.active {
+  background: var(--surface-3);
+  box-shadow: var(--shadow-knob);
+}
+
+.seg-count {
+  color: var(--text-3);
   font-weight: 500;
-  margin-bottom: 1.5rem;
-  backdrop-filter: blur(12px);
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.seg-btn.active .seg-count {
+  color: var(--text-2);
+}
+
+/* Admin kilépés gomb: mobilon a menülapból érhető el */
+.admin-exit {
+  font-size: 0.76rem;
+  padding: 6px 10px;
+  min-height: 30px;
+}
+
+.seg-btn.admin-seg {
+  color: var(--orange);
+}
+
+.seg-btn.admin-seg.active {
+  color: var(--orange);
+}
+
+/* ============================================================
+   7. GOMBOK
+   ============================================================ */
+
+.btn-mac {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  min-height: 32px;
+  border-radius: var(--r-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease),
+    box-shadow var(--dur-1) var(--ease);
+}
+
+.btn-mac:active {
+  transform: scale(0.97);
+}
+
+.btn-mac-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-1), var(--edge-light);
+}
+
+.btn-mac-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-mac-secondary {
+  background: var(--fill);
+  color: var(--text);
+  border-color: var(--border);
+  box-shadow: var(--edge-light);
+}
+
+.btn-mac-secondary:hover {
+  background: var(--fill-hover);
+  border-color: var(--border-strong);
+}
+
+.btn-mac-ghost {
+  background: transparent;
+  color: var(--text-2);
+  border-color: transparent;
+}
+
+.btn-mac-ghost:hover {
+  background: var(--fill);
+  color: var(--text);
+}
+
+.btn-mac-danger {
+  background: var(--red-soft);
+  color: var(--red);
+  border-color: var(--red-line);
+}
+
+.btn-mac-danger:hover {
+  background: var(--red-soft);
+  border-color: var(--red);
+}
+
+/* Ikongomb (téma, hamburger, vissza a tetejére) */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-sm);
+  background: var(--fill);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--edge-light);
+  transition:
+    background-color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+
+.icon-btn:hover {
+  background: var(--fill-hover);
+  border-color: var(--border-strong);
+}
+
+.icon-btn:active {
+  transform: scale(0.94);
+}
+
+.icon-btn svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+}
+
+/* Téma-váltó: a nap/hold ikon átfordul */
+.theme-toggle .theme-icon {
+  transition: transform var(--dur-3) var(--ease), opacity var(--dur-2) var(--ease);
+}
+
+.theme-toggle:hover .theme-icon {
+  transform: rotate(35deg);
+}
+
+/* --- Hamburger --- */
+.hamburger-btn {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-sm);
+  background: var(--fill);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  box-shadow: var(--edge-light);
+}
+
+.hamburger-bar {
+  display: block;
+  width: 16px;
+  height: 1.5px;
+  background: var(--text);
+  border-radius: 2px;
+  transition: transform var(--dur-2) var(--ease), opacity var(--dur-1) linear;
+}
+
+.hamburger-btn.is-open .hamburger-bar:nth-child(1) {
+  transform: translateY(5.5px) rotate(45deg);
+}
+
+.hamburger-btn.is-open .hamburger-bar:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger-btn.is-open .hamburger-bar:nth-child(3) {
+  transform: translateY(-5.5px) rotate(-45deg);
+}
+
+/* ============================================================
+   8. MOBIL MENÜ (lecsúszó lap)
+   ============================================================ */
+
+.mobile-scrim {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 190;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-2) var(--ease);
+}
+
+.mobile-scrim.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-sheet {
+  display: none;
+  position: fixed;
+  top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  left: 0;
+  right: 0;
+  z-index: 195;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 8px var(--gutter) 0;
+}
+
+.mobile-sheet-inner {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3), var(--edge-light);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transform-origin: top center;
+  animation: sheet-in var(--dur-2) var(--ease) both;
+}
+
+@keyframes sheet-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.sheet-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  min-height: 44px;
+  transition: background-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+
+.sheet-item:hover {
+  background: var(--fill);
+  color: var(--text);
+}
+
+.sheet-item.active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.sheet-item.active .seg-count {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.sheet-item.admin-seg {
+  color: var(--orange);
+}
+
+.sheet-item.danger {
+  color: var(--red);
+}
+
+.sheet-sep {
+  height: 1px;
+  background: var(--separator);
+  margin: 4px 8px;
+}
+
+/* ============================================================
+   9. ÁLLAPOTSÁVOK
+   ============================================================ */
+
+.status-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  background: var(--fill);
+  color: var(--text-2);
 }
 
 .status-banner.info {
-  background: rgba(59, 130, 246, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
 }
 
 .status-banner.error {
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  background: var(--orange-soft);
+  border-color: var(--orange-line);
+  color: var(--orange);
 }
 
-/* Controls & Search */
+/* Pörgő jelző */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: 0.9;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   10. ESZKÖZTÁR: kereső + bolt-szűrők
+   ============================================================ */
+
 .coupon-grid-section {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 18px;
 }
 
-.grid-controls {
+/* Az eszköztár a fejléc alá tapad — mint a Finder toolbarja a titlebar alatt.
+   Nem tömör sávot használ (az nem passzolna a hátterek színátmenetéhez),
+   hanem ugyanazt a vibrancy-réteget, mint a fejléc. */
+.grid-toolbar {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 90;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 10px;
+  padding: 10px var(--gutter) 10px;
+  margin: 0 calc(var(--gutter) * -1);
+  background: var(--chrome);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid var(--separator);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .grid-toolbar {
+    background: var(--chrome-solid);
+  }
+}
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .search-wrapper {
   position: relative;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+}
+
+.search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  pointer-events: none;
+  width: 15px;
+  height: 15px;
 }
 
 .mac-input {
   width: 100%;
-  padding: 0.85rem 1.15rem;
-  background: rgba(18, 20, 26, 0.8);
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-lg);
-  color: var(--mac-text-primary);
-  font-size: 0.95rem;
-  font-family: inherit;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 0.88rem;
   outline: none;
-  backdrop-filter: blur(12px);
-  transition: all 0.2s ease;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition:
+    border-color var(--dur-1) var(--ease),
+    box-shadow var(--dur-1) var(--ease),
+    background-color var(--dur-1) var(--ease);
+}
+
+.mac-input::placeholder {
+  color: var(--text-3);
 }
 
 .mac-input:focus {
-  border-color: var(--mac-accent-blue);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-  background: rgba(24, 27, 36, 0.95);
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+.search-wrapper .mac-input {
+  padding-left: 33px;
+  padding-right: 34px;
+  min-height: 36px;
 }
 
 .clear-icon {
   position: absolute;
-  right: 1.15rem;
+  right: 7px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--mac-text-muted);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: var(--fill-strong);
+  color: var(--text-2);
+  border-radius: 50%;
+  font-size: 0.9rem;
+  line-height: 1;
   cursor: pointer;
-  font-size: 1.3rem;
+  transition: background-color var(--dur-1) var(--ease);
 }
 
-/* Store Filter Pills - Touch Scrollable */
+.clear-icon:hover {
+  background: var(--border-strong);
+  color: var(--text);
+}
+
+/* --- Bolt-szűrő chipek (szögletes, nem pill) --- */
+/* Vízszintesen görgethető chipsor. Szándékosan nincs negatív margója:
+   panelen belül (Deal Studio) kilógna a kártya keretéből. */
 .tabs-scroll-wrapper {
+  position: relative;
   width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: none; /* Firefox */
-  padding-bottom: 4px;
+  scrollbar-width: none;
+  padding: 2px 0;
 }
 
 .tabs-scroll-wrapper::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
+  display: none;
 }
 
 .tabs-container {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0.55rem;
+  gap: 6px;
   width: max-content;
 }
 
 .tab-pill {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--mac-border);
-  color: var(--mac-text-secondary);
-  padding: 0.5rem 1.1rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
+  background: var(--fill);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s ease;
+  min-height: 30px;
+  box-shadow: var(--edge-light);
+  transition:
+    background-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease);
   flex-shrink: 0;
 }
 
 .tab-pill:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--mac-text-primary);
-  border-color: var(--mac-border-hover);
+  background: var(--fill-hover);
+  color: var(--text);
+  border-color: var(--border-strong);
 }
 
+.tab-pill:active {
+  transform: scale(0.96);
+}
+
+/* Aktív chip: mindkét módban tömör akcentszín — a régi fehér-fehéren eltűnt */
 .tab-pill.active {
-  background: #ffffff;
-  color: #0b0c10;
-  border-color: #ffffff;
-  font-weight: 700;
-  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.2);
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+  box-shadow: var(--shadow-1);
+}
+
+.tab-pill .pill-count {
+  opacity: 0.6;
+  margin-left: 5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .results-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.85rem;
-  color: var(--mac-text-secondary);
-  padding: 0 0.25rem;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: var(--text-3);
+  padding: 0 2px;
+}
+
+.results-info strong {
+  color: var(--text-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .active-filter-badge {
-  background: rgba(59, 130, 246, 0.15);
-  color: #93c5fd;
-  padding: 0.2rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 3px 9px;
+  border-radius: var(--r-xs);
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--accent-line);
+  white-space: nowrap;
 }
 
-/* Responsive Coupons Grid */
+/* ============================================================
+   11. KUPONKÁRTYÁK
+   ============================================================ */
+
 .coupons-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.35rem;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 16px;
 }
 
 .coupon-card {
-  background: var(--mac-bg-card);
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-xl);
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  backdrop-filter: blur(16px);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  width: 100%;
+  box-shadow: var(--shadow-1), var(--edge-light);
+  transition:
+    transform var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease),
+    box-shadow var(--dur-2) var(--ease),
+    background-color var(--dur-2) var(--ease);
+  /* `backwards`, nem `both`: a lejátszás után a kártya visszaadja a
+     transform vezérlését, különben a keyframe felülírná a hover-emelést. */
+  animation: card-in 0.44s var(--ease-out) backwards;
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .coupon-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--mac-border-hover);
-  box-shadow: var(--mac-shadow);
-  background: var(--mac-bg-card-hover);
+  transform: translateY(-3px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-2);
+  background: var(--surface-2);
+}
+
+/* Fénycsík-áthúzás hoverre — olcsó, GPU-barát */
+.coupon-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.07) 48%,
+    transparent 58%
+  );
+  transform: translateX(-100%);
+  opacity: 0;
+  transition: transform 0.85s var(--ease-out), opacity 0.2s linear;
+}
+
+.coupon-card:hover::after {
+  transform: translateX(100%);
+  opacity: 1;
+}
+
+:root[data-theme='light'] .coupon-card::after {
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(0, 0, 0, 0.035) 48%,
+    transparent 58%
+  );
 }
 
 .card-image-wrapper {
   position: relative;
   width: 100%;
-  height: 200px;
-  background: rgba(0, 0, 0, 0.2);
+  aspect-ratio: 4 / 3;
+  background: var(--well);
   overflow: hidden;
+  border-bottom: 1px solid var(--separator);
+}
+
+/* aspect-ratio fallback régebbi böngészőkre */
+@supports not (aspect-ratio: 4 / 3) {
+  .card-image-wrapper {
+    height: 200px;
+  }
 }
 
 .coupon-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.4s ease;
+  transition: transform 0.5s var(--ease-out), opacity var(--dur-3) var(--ease);
+}
+
+.coupon-image.is-loading {
+  opacity: 0;
 }
 
 .coupon-card:hover .coupon-image {
-  transform: scale(1.04);
+  transform: scale(1.045);
+}
+
+/* Felső sötétítés, hogy a badge-ek mindig olvashatók legyenek */
+.card-image-wrapper::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 64px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.42), transparent);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.badge-source,
+.badge-warehouse {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border-radius: var(--r-xs);
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
 }
 
 .badge-source {
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8px);
-  color: #ffffff;
-  padding: 0.25rem 0.6rem;
-  border-radius: var(--mac-radius-sm);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  top: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
 .badge-warehouse {
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.badge-warehouse .dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #30d158;
+  margin-right: 5px;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(48, 209, 88, 0.8);
+}
+
+/* Lejárat-jelző */
+.badge-expiry {
   position: absolute;
-  bottom: 0.75rem;
-  right: 0.75rem;
-  background: rgba(16, 185, 129, 0.85);
-  backdrop-filter: blur(8px);
-  color: #ffffff;
-  padding: 0.25rem 0.6rem;
-  border-radius: var(--mac-radius-sm);
-  font-size: 0.7rem;
+  z-index: 2;
+  top: 8px;
+  right: 8px;
+  padding: 3px 7px;
+  border-radius: var(--r-xs);
+  font-size: 0.63rem;
   font-weight: 700;
+  letter-spacing: 0.03em;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+}
+
+.badge-expiry.urgent {
+  background: rgba(255, 69, 58, 0.9);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .coupon-info {
-  padding: 1.15rem;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   flex-grow: 1;
-  justify-content: space-between;
-  gap: 0.9rem;
+  gap: 10px;
 }
 
 .coupon-title {
-  font-size: 0.95rem;
+  font-size: 0.86rem;
   font-weight: 600;
-  line-height: 1.4;
-  color: var(--mac-text-primary);
+  line-height: 1.38;
+  letter-spacing: -0.008em;
+  color: var(--text);
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  height: 2.8em;
+  min-height: 2.4em;
 }
 
-.coupon-details {
+/* Ár-sáv: nagy szám + kicsi pénznem */
+.price-rail {
   display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 0.7rem 0.85rem;
-  border-radius: var(--mac-radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.detail-row {
-  display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  align-items: center;
-  font-size: 0.85rem;
+  gap: 10px;
+  margin-top: auto;
 }
 
-.detail-label {
-  color: var(--mac-text-secondary);
-  font-size: 0.78rem;
-}
-
-.detail-code {
-  font-family: monospace;
-  font-weight: 700;
-  color: var(--mac-accent-cyan);
-  background: rgba(6, 182, 212, 0.12);
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  border: 1px solid rgba(6, 182, 212, 0.2);
-}
-
-.detail-price {
-  font-weight: 800;
-  font-size: 1.05rem;
-  color: var(--mac-accent-gold);
-}
-
-.card-actions {
+.price-block {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 1px;
+  min-width: 0;
 }
 
-.btn-card {
-  width: 100%;
-  padding: 0.65rem 1rem;
-  border-radius: var(--mac-radius-md);
-  font-size: 0.85rem;
+.price-label {
+  font-size: 0.63rem;
   font-weight: 600;
-  border: none;
-  cursor: pointer;
-  text-align: center;
-  text-decoration: none;
-  transition: all 0.2s ease;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-3);
 }
 
-.btn-view {
-  background: var(--mac-accent-blue);
-  color: #ffffff;
+.price-value {
+  font-size: 1.22rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--price);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.btn-view:hover {
-  background: #2563eb;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
-}
-
-.btn-copy {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--mac-text-primary);
-  border: 1px solid var(--mac-border);
-}
-
-.btn-copy:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.btn-copy.copied {
-  background: rgba(16, 185, 129, 0.2);
-  color: #6ee7b7;
-  border-color: rgba(16, 185, 129, 0.4);
-}
-
-.btn-studio {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fcd34d;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.btn-studio:hover {
-  background: rgba(245, 158, 11, 0.25);
-}
-
-.load-more-wrapper {
-  text-align: center;
-  margin-top: 2rem;
-}
-
-.load-more-btn {
-  padding: 0.85rem 2.25rem;
-}
-
-/* Mac Buttons */
-.btn-mac {
-  padding: 0.6rem 1.15rem;
-  border-radius: var(--mac-radius-md);
-  font-size: 0.85rem;
+.price-value.is-soft {
+  font-size: 0.86rem;
   font-weight: 600;
-  border: none;
+  color: var(--text-2);
+  letter-spacing: 0;
+}
+
+.price-value .cur {
+  font-size: 0.68em;
+  font-weight: 600;
+  margin-left: 3px;
+  color: var(--text-3);
+}
+
+/* Kuponkód-chip: kattintásra másol */
+.code-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: var(--r-xs);
+  background: var(--code-soft);
+  border: 1px dashed var(--code-line);
+  color: var(--code);
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: all 0.2s ease;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+
+.code-chip:hover {
+  border-style: solid;
+  background: var(--code-soft);
+  border-color: var(--code);
+}
+
+.code-chip:active {
+  transform: scale(0.95);
+}
+
+.code-chip.is-copied {
+  background: var(--green-soft);
+  border-color: var(--green-line);
+  border-style: solid;
+  color: var(--green);
+}
+
+.code-chip.is-auto {
+  background: var(--fill);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  cursor: default;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+.code-chip .code-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.btn-mac-primary {
-  background: var(--mac-accent-blue);
-  color: #ffffff;
+.code-chip svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  opacity: 0.8;
 }
 
-.btn-mac-primary:hover {
-  background: #2563eb;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+.card-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
 }
 
-.btn-mac-secondary {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--mac-text-primary);
-  border: 1px solid var(--mac-border);
+.card-actions.has-studio {
+  grid-template-columns: 1fr auto;
 }
 
-.btn-mac-secondary:hover {
-  background: rgba(255, 255, 255, 0.12);
+.btn-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  min-height: 36px;
+  border-radius: var(--r-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease);
 }
 
-/* Admin PIN Modal */
+.btn-card:active {
+  transform: scale(0.98);
+}
+
+.btn-view {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-1), var(--edge-light);
+}
+
+.btn-view:hover {
+  background: var(--accent-hover);
+}
+
+.btn-studio {
+  width: auto;
+  padding: 8px 10px;
+  background: var(--orange-soft);
+  color: var(--orange);
+  border-color: var(--orange-line);
+}
+
+.btn-studio:hover {
+  border-color: var(--orange);
+}
+
+/* --- Üres állapot --- */
+.empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 64px 24px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-xl);
+}
+
+.empty-state svg {
+  width: 34px;
+  height: 34px;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+
+.empty-state h4 {
+  font-size: 0.98rem;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.empty-state p {
+  font-size: 0.85rem;
+  color: var(--text-3);
+  max-width: 40ch;
+}
+
+/* --- Skeleton betöltés --- */
+.skeleton-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  box-shadow: var(--edge-light);
+}
+
+.sk {
+  position: relative;
+  overflow: hidden;
+  background: var(--skeleton);
+  border-radius: var(--r-xs);
+}
+
+.sk::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--skeleton-sheen), transparent);
+  animation: shimmer 1.35s infinite;
+}
+
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+.sk-image {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 0;
+}
+
+.sk-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.sk-line {
+  height: 11px;
+}
+
+.sk-line.w-90 { width: 90%; }
+.sk-line.w-60 { width: 60%; }
+.sk-line.w-40 { width: 40%; }
+.sk-btn { height: 36px; border-radius: var(--r-sm); margin-top: 4px; }
+
+.load-more-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 26px;
+}
+
+.load-more-btn {
+  padding: 10px 22px;
+  min-height: 40px;
+}
+
+/* ============================================================
+   12. VISSZA A TETEJÉRE
+   ============================================================ */
+
+.to-top {
+  position: fixed;
+  right: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 150;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-lg);
+  background: var(--chrome);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--shadow-2), var(--edge-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(12px) scale(0.9);
+  pointer-events: none;
+  transition:
+    opacity var(--dur-2) var(--ease),
+    transform var(--dur-2) var(--ease),
+    background-color var(--dur-1) var(--ease);
+}
+
+.to-top.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.to-top:hover {
+  background: var(--surface-3);
+}
+
+.to-top:active {
+  transform: scale(0.92);
+}
+
+.to-top svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ============================================================
+   13. MODÁLISOK
+   ============================================================ */
+
 .modal-overlay {
   position: fixed;
   top: 0;
-  left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.78);
-  backdrop-filter: blur(16px);
+  left: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: 20px;
+  animation: fade-in var(--dur-2) var(--ease) both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .admin-modal-card {
-  background: #16181e;
-  border: 1px solid var(--mac-border-hover);
-  border-radius: var(--mac-radius-xl);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
   width: 100%;
-  max-width: 420px;
-  padding: 1.5rem;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  max-width: 400px;
+  padding: 18px;
+  box-shadow: var(--shadow-3), var(--edge-light);
+  animation: modal-in var(--dur-2) var(--ease-out) both;
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .review-form-card {
-  max-width: 600px;
-  max-height: 90vh;
+  max-width: 620px;
+  max-height: min(86vh, 760px);
   overflow-y: auto;
 }
 
@@ -573,359 +1662,501 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--separator);
 }
 
 .modal-header h3 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--mac-text-primary);
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
 }
 
 .modal-close {
-  background: transparent;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fill);
   border: none;
-  color: var(--mac-text-muted);
-  font-size: 1.5rem;
+  border-radius: 50%;
+  color: var(--text-2);
+  font-size: 1rem;
+  line-height: 1;
   cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+
+.modal-close:hover {
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .admin-instruction {
-  font-size: 0.85rem;
-  color: var(--mac-text-secondary);
-  margin-bottom: 1.15rem;
+  font-size: 0.84rem;
+  color: var(--text-2);
+  margin-bottom: 16px;
   line-height: 1.5;
 }
 
+/* PIN: 4 külön cella-illúzió egyetlen inputon */
 .pin-input-group {
   display: flex;
   justify-content: center;
-  margin-bottom: 1.15rem;
+  margin-bottom: 14px;
 }
 
 .pin-input {
-  width: 150px;
+  width: 100%;
+  max-width: 220px;
   text-align: center;
-  font-size: 1.7rem;
-  letter-spacing: 0.3em;
-  padding: 0.5rem;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-md);
-  color: var(--mac-accent-cyan);
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.55em;
+  text-indent: 0.55em;
+  padding: 12px 8px;
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text);
   outline: none;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
+}
+
+.pin-input:focus {
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+.pin-input.has-error {
+  border-color: var(--red);
+  animation: shake 0.32s var(--ease);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(2px); }
 }
 
 .admin-error-msg {
-  color: #f87171;
-  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--red);
+  font-size: 0.82rem;
+  font-weight: 500;
   text-align: center;
-  margin-bottom: 1rem;
+  margin-bottom: 12px;
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.25rem;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--separator);
 }
 
-/* Reviews / Tesztek Page */
+/* ============================================================
+   14. ŰRLAPOK
+   ============================================================ */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+  min-width: 0;
+}
+
+.form-group label,
+.form-label {
+  font-size: 0.74rem;
+  color: var(--text-3);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+textarea.mac-input {
+  resize: vertical;
+  line-height: 1.55;
+  font-size: 0.84rem;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+}
+
+/* ============================================================
+   15. SZEKCIÓ-FEJLÉCEK & KÁRTYALAPOK
+   ============================================================ */
+
+.panel,
+.reviews-header-banner,
+.studio-header,
+.studio-picker-section,
+.studio-panel,
+.feeds-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  padding: 18px;
+  box-shadow: var(--shadow-1), var(--edge-light);
+}
+
+.section-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.section-sub {
+  font-size: 0.85rem;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+/* ============================================================
+   16. TESZTEK / REVIEWS
+   ============================================================ */
+
 .reviews-page {
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: 18px;
 }
 
-.reviews-header-banner {
-  background: var(--mac-bg-card);
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-xl);
-  padding: 1.75rem;
-  backdrop-filter: blur(16px);
+.reviews-header-banner h2,
+.studio-header h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+  color: var(--text);
 }
 
-.reviews-header-banner h2 {
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  margin-bottom: 0.4rem;
-}
-
-.reviews-header-banner p {
-  color: var(--mac-text-secondary);
-  font-size: 0.9rem;
+.reviews-header-banner p,
+.studio-header p {
+  color: var(--text-2);
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
 .reviews-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
 }
 
 .review-card {
-  background: var(--mac-bg-card);
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-xl);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  backdrop-filter: blur(16px);
-  transition: all 0.3s ease;
+  box-shadow: var(--shadow-1), var(--edge-light);
+  transition:
+    transform var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease),
+    box-shadow var(--dur-2) var(--ease);
 }
 
 .review-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--mac-border-hover);
+  transform: translateY(-3px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-2);
 }
 
 .review-image-wrapper {
   position: relative;
   width: 100%;
-  height: 200px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--well);
+  border-bottom: 1px solid var(--separator);
+}
+
+@supports not (aspect-ratio: 16 / 9) {
+  .review-image-wrapper { height: 190px; }
 }
 
 .review-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.5s var(--ease-out);
+}
+
+.review-card:hover .review-image {
+  transform: scale(1.04);
 }
 
 .badge-category {
   position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  background: rgba(59, 130, 246, 0.85);
-  backdrop-filter: blur(8px);
-  color: #ffffff;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
+  top: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: var(--r-xs);
+  font-size: 0.65rem;
   font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
 .btn-delete-review {
   position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  background: rgba(239, 68, 68, 0.85);
-  color: #ffffff;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: none;
-  font-size: 1.1rem;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 69, 58, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #fff;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-xs);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 1rem;
+  line-height: 1;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--dur-1) var(--ease);
+}
+
+.btn-delete-review:hover {
+  transform: scale(1.08);
 }
 
 .review-content {
-  padding: 1.25rem;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 8px;
   flex-grow: 1;
 }
 
 .review-date {
-  font-size: 0.75rem;
-  color: var(--mac-text-muted);
+  font-size: 0.7rem;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
 }
 
 .review-title {
-  font-size: 1.05rem;
-  font-weight: 700;
-  line-height: 1.35;
+  font-size: 0.98rem;
+  font-weight: 650;
+  line-height: 1.32;
+  letter-spacing: -0.015em;
+  color: var(--text);
 }
 
 .review-desc {
-  font-size: 0.88rem;
-  color: var(--mac-text-secondary);
+  font-size: 0.84rem;
+  color: var(--text-2);
   line-height: 1.55;
 }
 
 .review-meta-box {
   display: flex;
-  gap: 1rem;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 0.65rem 0.85rem;
-  border-radius: var(--mac-radius-md);
-  margin-top: 0.35rem;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
 }
 
 .review-meta-item {
-  display: flex;
-  gap: 0.4rem;
-  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  padding: 4px 8px;
+  font-size: 0.74rem;
 }
 
 .meta-label {
-  color: var(--mac-text-muted);
+  color: var(--text-3);
 }
 
 .meta-val.code {
-  color: var(--mac-accent-cyan);
+  color: var(--code);
   font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
 }
 
 .meta-val.price {
-  color: var(--mac-accent-gold);
+  color: var(--price);
   font-weight: 700;
 }
 
 .full-width {
   width: 100%;
   text-align: center;
-  margin-top: 0.5rem;
+  margin-top: auto;
+  padding-top: 4px;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-bottom: 0.9rem;
+/* ============================================================
+   17. FEEDS PANEL
+   ============================================================ */
+
+.feeds-section h3 {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
 }
 
-.form-group label {
-  font-size: 0.8rem;
-  color: var(--mac-text-secondary);
-  font-weight: 600;
+.feeds-section p {
+  font-size: 0.84rem;
+  color: var(--text-2);
 }
 
-.form-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.85rem;
-}
-
-/* Feeds Card */
-.feeds-section {
-  background: var(--mac-bg-card);
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-xl);
-  padding: 1.75rem;
+.feeds-section code {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 0.78rem;
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  padding: 2px 6px;
+  color: var(--code);
+  word-break: break-all;
 }
 
 .feeds-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 1.15rem;
+  gap: 6px;
+  margin-top: 14px;
 }
 
 .feed-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1.15rem;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: var(--mac-radius-md);
-  border: 1px solid var(--mac-border);
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--well);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+}
+
+.feed-name {
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .feed-status.active {
-  color: #34d399;
-  font-size: 0.82rem;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
 }
 
-/* ===================================================
-   DEAL STUDIO
-   =================================================== */
+.feed-status.active::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px var(--green-soft);
+  animation: pulse-dot 2s var(--ease) infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ============================================================
+   18. DEAL STUDIO
+   ============================================================ */
 
 .deal-studio-container {
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: 18px;
 }
 
-.studio-header {
-  background: var(--mac-bg-card);
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-xl);
-  padding: 1.75rem;
-  backdrop-filter: blur(16px);
-}
-
-.studio-header h2 {
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  margin-bottom: 0.4rem;
-}
-
-.studio-header p {
-  color: var(--mac-text-secondary);
-  font-size: 0.9rem;
-}
-
-.studio-picker-section {
-  background: var(--mac-bg-card);
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-xl);
-  padding: 1.5rem;
-  backdrop-filter: blur(16px);
-}
-
-.studio-picker-section h3 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  margin-bottom: 0.25rem;
+.studio-picker-section h3,
+.studio-panel h3 {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  margin-bottom: 10px;
+  color: var(--text);
 }
 
 .studio-product-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  max-height: 420px;
+  gap: 4px;
+  max-height: 400px;
   overflow-y: auto;
-  margin-top: 0.85rem;
-  padding-right: 0.25rem;
-}
-
-.studio-product-list::-webkit-scrollbar {
-  width: 5px;
-}
-
-.studio-product-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.studio-product-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
+  margin-top: 10px;
+  padding-right: 4px;
 }
 
 .studio-product-item {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.65rem 0.85rem;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-md);
+  gap: 10px;
+  padding: 8px;
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
 }
 
 .studio-product-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--mac-border-hover);
+  background: var(--fill-hover);
+  border-color: var(--border-strong);
 }
 
 .studio-product-item.selected {
-  background: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.4);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
 }
 
 .product-item-thumb {
-  width: 52px;
-  height: 52px;
-  border-radius: var(--mac-radius-sm);
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r-sm);
   overflow: hidden;
   flex-shrink: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--fill);
+  border: 1px solid var(--border);
 }
 
 .product-item-thumb img {
@@ -940,22 +2171,22 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--mac-text-muted);
-  font-size: 0.75rem;
+  color: var(--text-3);
+  font-size: 0.72rem;
 }
 
 .product-item-info {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 }
 
 .product-item-name {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: var(--mac-text-primary);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -963,62 +2194,54 @@ body {
 
 .product-item-meta {
   display: flex;
-  gap: 0.5rem;
+  gap: 5px;
   align-items: center;
   flex-wrap: wrap;
 }
 
-.product-item-source {
-  font-size: 0.72rem;
+.product-item-source,
+.product-item-code,
+.product-item-price {
+  font-size: 0.68rem;
   font-weight: 700;
-  color: var(--mac-text-muted);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  padding: 1px 5px;
+  border-radius: var(--r-xs);
+  border: 1px solid transparent;
+}
+
+.product-item-source {
+  color: var(--text-3);
+  background: var(--fill);
+  border-color: var(--border);
 }
 
 .product-item-code {
-  font-size: 0.72rem;
-  font-weight: 700;
-  font-family: monospace;
-  color: var(--mac-accent-cyan);
-  background: rgba(6, 182, 212, 0.1);
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  color: var(--code);
+  background: var(--code-soft);
+  border-color: var(--code-line);
 }
 
 .product-item-price {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--mac-accent-gold);
+  color: var(--price);
+  background: transparent;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Studio two-column layout */
 .studio-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-}
-
-.studio-panel {
-  background: var(--mac-bg-card);
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-xl);
-  padding: 1.5rem;
-  backdrop-filter: blur(16px);
-}
-
-.studio-panel h3 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
+  gap: 18px;
+  align-items: start;
 }
 
 .canvas-preview-container {
   width: 100%;
-  border-radius: var(--mac-radius-md);
+  border-radius: var(--r-md);
   overflow: hidden;
-  border: 1px solid var(--mac-border);
+  border: 1px solid var(--border);
+  background: var(--well);
+  box-shadow: var(--shadow-1);
 }
 
 .canvas-preview-container canvas {
@@ -1027,177 +2250,237 @@ body {
   display: block;
 }
 
-/* Hamburger Button */
-.hamburger-btn {
-  display: none;
+.studio-hint {
+  font-size: 0.8rem;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+.studio-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 0.85rem;
+}
+
+.stack-8 {
+  display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  background: transparent;
-  border: 1px solid var(--mac-border);
-  border-radius: var(--mac-radius-sm);
-  padding: 8px;
-  cursor: pointer;
-  width: 40px;
-  height: 40px;
+  gap: 8px;
 }
 
-.hamburger-bar {
-  display: block;
-  width: 100%;
-  height: 2px;
-  background: var(--mac-text-primary);
-  border-radius: 2px;
-  transition: all 0.3s ease;
-}
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.w-full { width: 100%; }
 
-.hamburger-btn.is-open .hamburger-bar:nth-child(1) {
-  transform: rotate(45deg) translate(5px, 5px);
-}
+/* ============================================================
+   19. RESPONSIVE
+   ============================================================ */
 
-.hamburger-btn.is-open .hamburger-bar:nth-child(2) {
-  opacity: 0;
-}
-
-.hamburger-btn.is-open .hamburger-bar:nth-child(3) {
-  transform: rotate(-45deg) translate(5px, -5px);
-}
-
-/* Header layout */
-.header-top-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.header-right-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-/* ===================================================
-   RESPONSIVE BREAKPOINTS (Mobile & Tablet First)
-   =================================================== */
-
-/* Tablet Screens (<= 960px) */
-@media (max-width: 960px) {
+/* Nagy tabletek / kis laptopok */
+@media (max-width: 1080px) {
   .studio-layout {
     grid-template-columns: 1fr;
   }
-
-  .coupons-grid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1.15rem;
-  }
 }
 
-/* Mobile Screens (<= 768px) - Hamburger Menu */
-@media (max-width: 768px) {
-  .main-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
-    padding: 0.85rem 1rem;
+/* Tablet: a szegmentált navigáció külön sorba kerülne — inkább menübe */
+@media (max-width: 900px) {
+  :root {
+    --header-h: 62px;
+    --gutter: 16px;
+  }
+
+  .segmented,
+  .admin-exit {
+    display: none;
   }
 
   .hamburger-btn {
     display: flex;
   }
 
-  .dark-toggle-btn {
-    font-size: 0.78rem;
-    padding: 0.45rem 0.85rem;
+  .mobile-sheet.is-open {
+    display: block;
   }
 
-  .nav-tabs {
-    display: none;
-    flex-direction: column;
-    background: rgba(0, 0, 0, 0.35);
-    border-radius: var(--mac-radius-md);
-    padding: 0.5rem;
-    margin-top: 0.85rem;
-    gap: 0.25rem;
-    border: 1px solid var(--mac-border);
+  .coupons-grid {
+    grid-template-columns: repeat(auto-fill, minmax(228px, 1fr));
+    gap: 12px;
   }
 
-  .nav-tabs.mobile-open {
-    display: flex;
-  }
-
-  .nav-tab {
-    width: 100%;
-    text-align: left;
-    padding: 0.7rem 1rem;
-    border-radius: var(--mac-radius-sm);
-    font-size: 0.9rem;
-  }
-
-  .nav-tab.active {
-    background: var(--mac-accent-blue);
+  .reviews-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   }
 }
 
-/* Small Smartphone Screens (<= 640px) */
-@media (max-width: 640px) {
-  .app-container {
-    padding: 0.6rem;
+/* Telefon */
+@media (max-width: 620px) {
+  :root {
+    --header-h: 56px;
+    --gutter: 12px;
   }
 
-  .main-header {
-    top: 0.4rem;
-    border-radius: var(--mac-radius-lg);
-    padding: 0.75rem;
-    margin-bottom: 1.25rem;
+  .window-dots {
+    display: none;
+  }
+
+  .header-inner {
+    padding: 10px var(--gutter);
+    gap: 10px;
+  }
+
+  .site-header.is-condensed .header-inner {
+    padding: 6px var(--gutter);
   }
 
   .brand-title {
-    font-size: 1.05rem;
+    font-size: 0.95rem;
+    letter-spacing: -0.02em;
   }
 
   .brand-subtitle {
     font-size: 0.6rem;
   }
 
+  .site-header.is-condensed .brand-title {
+    font-size: 0.86rem;
+  }
+
+  .app-container,
+  .main-content {
+    padding-bottom: 72px;
+  }
+
   .coupons-grid {
+    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+    gap: 10px;
+  }
+
+  .coupon-info {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .coupon-title {
+    font-size: 0.79rem;
+  }
+
+  .price-value {
+    font-size: 1.05rem;
+  }
+
+  .btn-card {
+    font-size: 0.78rem;
+    padding: 8px 8px;
+  }
+
+  .card-actions.has-studio {
     grid-template-columns: 1fr;
-    gap: 1.15rem;
+  }
+
+  .btn-studio {
+    width: 100%;
   }
 
   .reviews-grid {
     grid-template-columns: 1fr;
-    gap: 1.15rem;
   }
 
-  .card-image-wrapper, .review-image-wrapper {
-    height: 185px;
+  .results-info {
+    font-size: 0.75rem;
   }
 
-  .mac-input {
-    padding: 0.75rem 1rem;
-    font-size: 0.88rem;
-  }
-
-  .load-more-btn {
-    width: 100%;
-    padding: 0.85rem 1rem;
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
   }
 
   .admin-modal-card {
-    padding: 1.25rem;
+    max-width: 100%;
+    animation: sheet-up var(--dur-2) var(--ease-out) both;
   }
 
-  .pin-input {
-    width: 130px;
-    font-size: 1.5rem;
+  @keyframes sheet-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .modal-actions .btn-mac {
+    flex: 1;
+    min-height: 40px;
+  }
+
+  .to-top {
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
   }
 
   .studio-product-list {
-    max-height: 300px;
+    max-height: 320px;
+  }
+}
+
+/* Nagyon keskeny telefonok: egy oszlop, hogy ne törjön a szöveg */
+@media (max-width: 380px) {
+  .coupons-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   20. AKADÁLYMENTESÍTÉS
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 
-  .product-item-thumb {
-    width: 42px;
-    height: 42px;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
+
+  .coupon-card:hover {
+    transform: none;
+  }
+
+  .coupon-card:hover .coupon-image,
+  .review-card:hover .review-image {
+    transform: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --border: rgba(255, 255, 255, 0.28);
+    --border-strong: rgba(255, 255, 255, 0.5);
+    --text-2: #d6d6db;
+    --text-3: #b0b0b6;
+  }
+
+  :root[data-theme='light'] {
+    --border: rgba(0, 0, 0, 0.3);
+    --border-strong: rgba(0, 0, 0, 0.55);
+    --text-2: #2c2c30;
+    --text-3: #46464a;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

@@ -68,7 +68,7 @@ async function fetchPromoProducts(promo, warehouse) {
       res = await callAliExpressApi('aliexpress.affiliate.featuredpromo.products.get', {
         tracking_id: ALIEXPRESS_TRACKING_ID,
         promotion_name: promo,
-        target_currency: 'EUR',
+        target_currency: 'USD',
         target_language: 'EN',
         country: 'HU',
         page_no: String(page),
@@ -92,7 +92,7 @@ async function fetchPromoProducts(promo, warehouse) {
 
 function toRow(product, warehouse, updateTime) {
   const price = product.target_sale_price
-    ? `${product.target_sale_price} ${product.target_sale_price_currency || 'EUR'}`
+    ? `${product.target_sale_price} ${product.target_sale_price_currency || 'USD'}`
     : '';
 
   return {

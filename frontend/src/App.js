@@ -46,7 +46,7 @@ async function fetchLiveGoogleSheet(sheetName) {
   const findColIndex = (keyWords, defaultIdx) => {
     const idx = cols.findIndex(col => {
       if (!col || !col.label) return false;
-      const label = col.label.toLowerCase();
+      const label = col.label.toLowerCase().trim();
       return keyWords.some(kw => label.includes(kw));
     });
     return idx !== -1 ? idx : defaultIdx;
@@ -54,38 +54,45 @@ async function fetchLiveGoogleSheet(sheetName) {
 
   const is9ColSchema = cols.length === 9 || (cols[2] && cols[2].label && cols[2].label.toLowerCase().includes('link'));
 
-  const imgIdx = findColIndex(['image', 'kép'], 0);
+  const imgIdx = findColIndex(['image', 'kép', 'fotó'], 0);
   const nameIdx = findColIndex(['product name', 'name', 'név', 'termék'], 1);
-  const linkIdx = findColIndex(['shortlink', 'link'], is9ColSchema ? 2 : 3);
-  const priceIdx = findColIndex(['coupon price', 'price', 'ár'], is9ColSchema ? 3 : 6);
+  const linkIdx = findColIndex(['shortlink', 'link', 'url'], is9ColSchema ? 2 : 3);
+  const priceIdx = findColIndex(['coupon price', 'price', 'akciós ár', 'akcios ar', 'kupon ár', 'kupon ar', 'ár', 'ar'], is9ColSchema ? 3 : 6);
   const codeIdx = findColIndex(['coupon code', 'code', 'kupon'], is9ColSchema ? 4 : 7);
   const warehouseIdx = findColIndex(['warehouse', 'raktár'], is9ColSchema ? 5 : 9);
   const endTimeIdx = findColIndex(['end time', 'endtime', 'lejárat'], is9ColSchema ? 6 : 12);
   const updateTimeIdx = findColIndex(['update time', 'updatetime', 'frissítés'], is9ColSchema ? 7 : 13);
   const shortlinkIdx = findColIndex(['shortlink'], is9ColSchema ? 8 : (is9ColSchema ? 2 : 3));
 
+  const getCellStr = (cell) => {
+    if (!cell) return '';
+    if (cell.f !== undefined && cell.f !== null) return String(cell.f).trim();
+    if (cell.v !== undefined && cell.v !== null) return String(cell.v).trim();
+    return '';
+  };
+
   return json.table.rows.map(row => {
     const c = row.c || [];
-    const rawImage = c[imgIdx] ? c[imgIdx].v : '';
-    const name = c[nameIdx] ? c[nameIdx].v : '';
-    const link = c[linkIdx] ? c[linkIdx].v : '';
-    const price = c[priceIdx] ? c[priceIdx].v : '';
-    const code = c[codeIdx] ? c[codeIdx].v : '';
-    const warehouse = c[warehouseIdx] ? c[warehouseIdx].v : '';
-    const endTime = c[endTimeIdx] ? c[endTimeIdx].v : '';
-    const updateTime = c[updateTimeIdx] ? c[updateTimeIdx].v : '';
-    const shortlink = c[shortlinkIdx] ? c[shortlinkIdx].v : '';
+    const rawImage = getCellStr(c[imgIdx]);
+    const name = getCellStr(c[nameIdx]);
+    const link = getCellStr(c[linkIdx]);
+    const price = getCellStr(c[priceIdx]);
+    const code = getCellStr(c[codeIdx]);
+    const warehouse = getCellStr(c[warehouseIdx]);
+    const endTime = getCellStr(c[endTimeIdx]);
+    const updateTime = getCellStr(c[updateTimeIdx]);
+    const shortlink = getCellStr(c[shortlinkIdx]);
 
     return {
-      image: typeof rawImage === 'string' ? rawImage : '',
-      name: typeof name === 'string' ? name : '',
-      link: typeof link === 'string' ? link : '',
-      price: price ? String(price) : '',
-      code: code ? String(code) : '',
-      warehouse: warehouse ? String(warehouse) : '',
-      endTime: endTime ? String(endTime) : '',
-      updateTime: updateTime ? String(updateTime) : '',
-      shortlink: shortlink ? String(shortlink) : '',
+      image: rawImage,
+      name: name,
+      link: link,
+      price: price,
+      code: code,
+      warehouse: warehouse,
+      endTime: endTime,
+      updateTime: updateTime,
+      shortlink: shortlink,
       source: sheetName
     };
   }).filter(item => item.name && item.link);

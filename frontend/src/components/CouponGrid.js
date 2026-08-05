@@ -4,32 +4,31 @@ import React, { useState, useEffect } from 'react';
 const getCurrencyForSource = (source) => {
   if (!source) return 'USD';
   const s = source.toLowerCase();
-  if (s.includes('geekbuying unique')) return 'EUR';
-  if (s.includes('geekbuying')) return 'USD';
-  if (s.includes('bg unique') || s.includes('bg unique hun')) return ''; // use sheet value as-is
-  if (s.includes('banggood') || s.includes('bg all')) return 'USD';
-  if (s.includes('aliexpress') || s.includes('aliexpressapi')) return 'USD';
+  if (s.includes('geekbuying unique') || s.includes('geekbuying')) return 'USD';
+  if (s.includes('bg unique') || s.includes('banggood')) return 'USD';
+  if (s.includes('aliexpress')) return 'USD';
   return 'USD';
 };
 
 const formatDisplayPrice = (rawPrice, source) => {
-  if (!rawPrice) return 'Lasd a linken';
-  let str = String(rawPrice).trim();
+  if (rawPrice === null || rawPrice === undefined || String(rawPrice).trim() === '') {
+    return 'Lásd a linken';
+  }
+  let str = String(rawPrice).trim().replace(/\s*Ft\s*$/gi, '').trim();
 
-  // Remove trailing "Ft" everywhere - we never want Ft
-  str = str.replace(/\s*Ft\s*$/gi, '').trim();
-
-  // If already has a currency symbol, just clean up and return
+  // If already has currency symbol/code (EUR, USD, $, €, GBP, £), return cleaned
   if (/EUR|USD|\$|€|GBP|£/i.test(str)) {
     return str;
   }
 
-  // Determine correct currency from source
+  // Handle numbers with comma decimals like "398,00" or "727,935491"
+  let numStr = str.replace(',', '.');
+  let num = parseFloat(numStr);
+  if (!isNaN(num)) {
+    str = (num % 1 === 0) ? String(Math.round(num)) : num.toFixed(2);
+  }
+
   const currency = getCurrencyForSource(source);
-
-  // If no currency mapped (BG Unique - use sheet value as-is)
-  if (!currency) return str || 'Lasd a linken';
-
   return `${str} ${currency}`;
 };
 

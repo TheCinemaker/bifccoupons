@@ -1,47 +1,46 @@
-/* eslint-disable jsx-a11y/accessible-emoji */
 import React, { useState, useEffect, useRef } from 'react';
 
 const PostTemplates = {
-  CASUAL_HYPE: `🔥 BOMBISZTIKUS AKCIÓ! {{title}} 🔥
+  CASUAL_HYPE: `AKCIÓ! {{title}}
 
-Magyarországon az Árukereső szerint: {{arukeresoPrice}} 😱
+Magyarországon az Árukereső szerint: {{arukeresoPrice}}
 Nálunk KUPONNAL csak: {{newPrice}}! 
-💰 TISZTA SPÓROLÁS: {{savingHuf}} (-{{discountPercent}}% olcsóbb mint itthon!)
+SPÓROLÁS: {{savingHuf}} (-{{discountPercent}}% olcsóbb mint itthon!)
 
-🎟️ Kuponkód: {{couponCode}}
-🏬 Bolt: {{storeName}} | {{warehouseName}}
+Kuponkód: {{couponCode}}
+Bolt: {{storeName}} | {{warehouseName}}
 
-👉 RENDELD MEG ITT KUPONOS ÁRON ➡️ {{affiliateUrl}}
+Rendeld meg itt kuponos áron: {{affiliateUrl}}
 
 #kinabolveddmeg #akció #kupon #arukereso #{{categorySlug}}`,
 
-  URGENT_LIMITED: `⚡ VILLÁMAKCIÓ - LIMITÁLT DARABSZÁM! ⚡
+  URGENT_LIMITED: `AKCIÓ - LIMITÁLT DARABSZÁM!
 {{title}}
 
-🇪🇺 {{warehouseName}} - Nincs vám, nincs extra ÁFA!
+{{warehouseName}} - Nincs vám, nincs extra ÁFA!
 
-🛒 Magyar bolti ár (Árukereső): {{arukeresoPrice}}
-📉 KÍNÁBÓL VEDD MEG KUPONOS ÁR: {{newPrice}}
-🔥 MEGSPÓROLSZ: {{savingHuf}}-ot!
+Magyar bolti ár (Árukereső): {{arukeresoPrice}}
+KÍNÁBÓL VEDD MEG KUPONOS ÁR: {{newPrice}}
+MEGSPÓROLSZ: {{savingHuf}}-ot!
 
-🔑 Kuponkód: {{couponCode}}
+Kuponkód: {{couponCode}}
 
-👇 Kattints a vásárláshoz a kuponos árért 👇
-🔗 {{affiliateUrl}}`,
+Kattints a vásárláshoz a kuponos árért:
+{{affiliateUrl}}`,
 
-  REVIEW_STYLE: `📌 KÍNÁBÓL VEDD MEG TESZT & ÁR-ÖSSZEHASONLÍTÁS 📌
+  REVIEW_STYLE: `KÍNÁBÓL VEDD MEG TESZT & ÁR-ÖSSZEHASONLÍTÁS
 
 Miért fizetnél többet itthon? A(z) {{title}} itthon az Árukeresőn {{arukeresoPrice}}!
 
-✨ Mi a helyzet nálunk?
+Mi a helyzet nálunk?
 - Rendelés közvetlenül a gyártótól / hivatalos boltból
 - {{warehouseName}} szállítás
 - Tisztán megmarad a zsebedben: {{savingHuf}}!
 
-🏷️ Kuponkód: {{couponCode}}
-🔥 Akciós Ár: {{newPrice}}
+Kuponkód: {{couponCode}}
+Akciós Ár: {{newPrice}}
 
-🛒 Vásárlási link ➡️ {{affiliateUrl}}`
+Vásárlási link: {{affiliateUrl}}`
 };
 
 export function generatePostText(deal, templateKey = 'CASUAL_HYPE') {
@@ -66,7 +65,7 @@ export function generatePostText(deal, templateKey = 'CASUAL_HYPE') {
     ? Math.round(((arukeresoPriceNum - discountPriceNum) / arukeresoPriceNum) * 100)
     : 35;
 
-  const warehouse = deal.warehouse ? `📦 Raktár: ${deal.warehouse}` : '🇪🇺 EU Raktár';
+  const warehouse = deal.warehouse ? `Raktár: ${deal.warehouse}` : 'EU Raktár';
 
   return template
     .replace(/{{title}}/g, deal.name || deal.title || '')
@@ -116,13 +115,11 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
     }
   }, [initialDeal]);
 
-  // Posztszöveg újragenerálása
   useEffect(() => {
     const text = generatePostText(deal, selectedTemplate);
     setGeneratedPostText(text);
   }, [deal, selectedTemplate]);
 
-  // Automatikus Árukereső keresés API hívás
   const handleAutoFetchArukereso = async () => {
     if (!deal.name) return;
     setIsSearchingArukereso(true);
@@ -141,7 +138,6 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
           arukeresoPrice: data.foundPrice.toString()
         }));
       } else {
-        // Fallback: Ha az API nem talált közvetlen árat, a kuponos ár 1.5x-ét vagy megnyitási opciót adunk
         if (parseFloat(deal.price)) {
           setDeal(prev => ({
             ...prev,
@@ -156,7 +152,6 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
     }
   };
 
-  // Canvas Banner Renderelése
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -166,7 +161,6 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
     canvas.width = width;
     canvas.height = height;
 
-    // Háttér
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, width, height);
 
@@ -175,21 +169,18 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
     img.src = deal.image ? deal.image.replace('http://', 'https://') : '';
 
     const drawOverlay = () => {
-      // Top Gradient
       const topGradient = ctx.createLinearGradient(0, 0, 0, 180);
       topGradient.addColorStop(0, 'rgba(15, 23, 42, 0.85)');
       topGradient.addColorStop(1, 'rgba(15, 23, 42, 0)');
       ctx.fillStyle = topGradient;
       ctx.fillRect(0, 0, width, 180);
 
-      // Bottom Gradient
       const bottomGradient = ctx.createLinearGradient(0, height - 260, 0, height);
       bottomGradient.addColorStop(0, 'rgba(15, 23, 42, 0)');
       bottomGradient.addColorStop(1, 'rgba(15, 23, 42, 0.95)');
       ctx.fillStyle = bottomGradient;
       ctx.fillRect(0, height - 260, width, 260);
 
-      // Top Right: Store Badge
       const storeName = deal.source || 'Banggood';
       ctx.fillStyle = '#ff5722';
       ctx.beginPath();
@@ -200,8 +191,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
       ctx.textAlign = 'center';
       ctx.fillText(storeName, width - 122, 57);
 
-      // Top Left: Warehouse Badge
-      const warehouseText = deal.warehouse ? `📦 ${deal.warehouse}` : '🇪🇺 EU Raktár';
+      const warehouseText = deal.warehouse ? `Raktár: ${deal.warehouse}` : 'EU Raktár';
       ctx.fillStyle = 'rgba(16, 185, 129, 0.9)';
       ctx.beginPath();
       ctx.roundRect(25, 25, 240, 48, 12);
@@ -211,7 +201,6 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
       ctx.textAlign = 'center';
       ctx.fillText(warehouseText, 145, 56);
 
-      // Discount Percentage Badge
       const discountPercentNum = deal.arukeresoPrice && deal.price 
         ? Math.round(((parseFloat(deal.arukeresoPrice) - parseFloat(deal.price)) / parseFloat(deal.arukeresoPrice)) * 100) 
         : 40;
@@ -226,7 +215,6 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
       ctx.textAlign = 'center';
       ctx.fillText(discountText, 155, height - 192);
 
-      // Domestic Price Comparison Box
       ctx.fillStyle = 'rgba(30, 41, 59, 0.92)';
       ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
       ctx.lineWidth = 2;
@@ -235,14 +223,12 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
       ctx.fill();
       ctx.stroke();
 
-      // Domestic price cross out
       const arukeresoVal = deal.arukeresoPrice ? `${parseInt(deal.arukeresoPrice).toLocaleString('hu-HU')} Ft` : '34 990 Ft';
       ctx.fillStyle = '#94a3b8';
       ctx.font = '600 20px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'left';
       ctx.fillText(`Árukereső ár: ${arukeresoVal}`, 45, height - 105);
 
-      // Red strikethrough line
       ctx.strokeStyle = '#ef4444';
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -250,13 +236,11 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
       ctx.lineTo(340, height - 112);
       ctx.stroke();
 
-      // KÍNÁBÓL VEDD MEG Price
       const dealPriceVal = deal.price ? `${parseInt(deal.price).toLocaleString('hu-HU')} Ft` : '18 990 Ft';
       ctx.fillStyle = '#00f0ff';
       ctx.font = '800 32px "Plus Jakarta Sans", sans-serif';
       ctx.fillText(`Kuponos ár: ${dealPriceVal}`, 45, height - 55);
 
-      // Coupon Code Box (Right Side)
       if (deal.code) {
         ctx.fillStyle = '#ffb703';
         ctx.beginPath();
@@ -271,11 +255,10 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
         ctx.fillText(deal.code, width - 177, height - 63);
       }
 
-      // Watermark Branding
       ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
       ctx.font = '600 15px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText('⚡ KÍNÁBÓL VEDD MEG OFFICIAL', width - 35, height - 15);
+      ctx.fillText('KÍNÁBÓL VEDD MEG OFFICIAL', width - 35, height - 15);
     };
 
     img.onload = () => {
@@ -315,14 +298,13 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
   return (
     <div className="deal-studio-container">
       <div className="studio-header">
-        <h2>⚡ Deal Studio & Autoposzt Generáló</h2>
+        <h2>Deal Studio & Autoposzt Generáló</h2>
         <p>Válassz kuponos ajánlatot a táblázatból, ellenőrizd az árat az Árukeresőn, generálj posztszöveget és tölts le profi reklámbannert 1 kattintással!</p>
       </div>
 
       <div className="studio-layout">
-        {/* Bal oldali oszlop: Form & Adatok */}
         <div className="studio-panel">
-          <h3>📦 1. Kijelölt Ajánlat & Árukereső Ár Szerkesztése</h3>
+          <h3>1. Kijelölt Ajánlat & Árukereső Ár Szerkesztése</h3>
           
           {availableCoupons.length > 0 && (
             <div className="form-group">
@@ -366,7 +348,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">📉 Kuponos Ár (Ft):</label>
+              <label className="form-label">Kuponos Ár (Ft):</label>
 
               <input 
                 type="text" 
@@ -377,7 +359,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
             </div>
             
             <div className="form-group">
-              <label className="form-label">🛒 Árukereső / Hazai Ár (Ft):</label>
+              <label className="form-label">Árukereső / Hazai Ár (Ft):</label>
 
               <div style={{display: 'flex', gap: '0.5rem'}}>
                 <input 
@@ -394,7 +376,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
                   disabled={isSearchingArukereso}
                   title="Automatikus Árukereső Ár Keresés"
                 >
-                  {isSearchingArukereso ? '⏳ Keresés...' : '🔍 Árukereső Keresés'}
+                  {isSearchingArukereso ? 'Keresés...' : 'Árukereső Keresés'}
                 </button>
               </div>
               
@@ -406,7 +388,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
                     rel="noopener noreferrer"
                     style={{color: 'var(--accent-cyan)'}}
                   >
-                    🔍 Árukereső keresés ↗
+                    Árukereső keresés
                   </a>
                   <a 
                     href={`https://www.argep.hu/main.aspx?suche=${encodeURIComponent(deal.name || '')}`} 
@@ -414,7 +396,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
                     rel="noopener noreferrer"
                     style={{color: 'var(--accent-gold)'}}
                   >
-                    🏷️ Árgép keresés ↗
+                    Árgép keresés
                   </a>
                 </div>
               )}
@@ -423,7 +405,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">🔑 Kuponkód:</label>
+              <label className="form-label">Kuponkód:</label>
 
               <input 
                 type="text" 
@@ -433,7 +415,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">📦 Raktár (pl. CZ / EU Raktár):</label>
+              <label className="form-label">Raktár (pl. CZ / EU Raktár):</label>
 
               <input 
                 type="text" 
@@ -445,7 +427,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
           </div>
 
           <div className="form-group">
-            <label className="form-label">🔗 Vásárlási Affiliate Link:</label>
+            <label className="form-label">Vásárlási Affiliate Link:</label>
 
             <input 
               type="text" 
@@ -456,7 +438,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
           </div>
 
           <div className="form-group">
-            <label className="form-label">🖼️ Termékkép URL:</label>
+            <label className="form-label">Termékkép URL:</label>
 
             <input 
               type="text" 
@@ -466,24 +448,22 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
             />
           </div>
 
-          {/* Poszt Sablon Választó */}
           <div className="form-group" style={{marginTop: '1.5rem'}}>
-            <label className="form-label">🔥 Poszt Stílus & Sablon:</label>
+            <label className="form-label">Poszt Stílus & Sablon:</label>
 
             <select 
               className="form-select"
               value={selectedTemplate}
               onChange={e => setSelectedTemplate(e.target.value)}
             >
-              <option value="CASUAL_HYPE">🔥 Bombasztikus Hype (Árukereső spórolás fókusz)</option>
-              <option value="URGENT_LIMITED">⚡ Villámakció - Limitált Darabszám</option>
-              <option value="REVIEW_STYLE">📌 Teszt & Ár-összehasonlító elemzés</option>
+              <option value="CASUAL_HYPE">Hype (Árukereső spórolás fókusz)</option>
+              <option value="URGENT_LIMITED">Villámakció - Limitált Darabszám</option>
+              <option value="REVIEW_STYLE">Teszt & Ár-összehasonlító elemzés</option>
             </select>
           </div>
 
-          {/* Poszt Kimenet & Másolás Gomb */}
           <div className="form-group">
-            <label className="form-label">📋 Generált Posztszöveg (FB / Telegram):</label>
+            <label className="form-label">Generált Posztszöveg (FB / Telegram):</label>
 
             <textarea 
               className="form-textarea post-output" 
@@ -498,13 +478,12 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
             onClick={handleCopyPost}
             style={{width: '100%'}}
           >
-            {copySuccess ? '✅ Posztszöveg Vágólapra Másolva!' : '📋 Posztszöveg Másolása'}
+            {copySuccess ? '[OK] Posztszöveg Vágólapra Másolva!' : 'Posztszöveg Másolása'}
           </button>
         </div>
 
-        {/* Jobb oldali oszlop: Live Canvas Banner Preview & Download */}
         <div className="studio-panel">
-          <h3>🖼️ 2. Automatizált Akciós Banner Kártya</h3>
+          <h3>2. Automatizált Akciós Banner Kártya</h3>
           <p style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>
             A rendszer automatikusan felhelyezi a kedvezményes ármatricát, a bolti logót, a kuponkódot és a vízjelet a képre.
           </p>
@@ -515,7 +494,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
 
           <div className="btn-group" style={{marginTop: '1.25rem'}}>
             <button className="btn-action btn-secondary" onClick={handleDownloadBanner} style={{width: '100%'}}>
-              📥 Banner Letöltése HD PNG Képként
+              Banner Letöltése HD PNG Képként
             </button>
           </div>
         </div>

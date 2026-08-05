@@ -1,4 +1,3 @@
-/* eslint-disable jsx-a11y/accessible-emoji */
 import React, { useEffect, useState } from 'react';
 import './Coupons.css';
 import CouponGrid from './components/CouponGrid';
@@ -23,12 +22,11 @@ const DarkModeToggle = () => {
 
   return (
     <button onClick={toggleDarkMode} className="dark-mode-toggle">
-      {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
+      {darkMode ? 'Light Mode' : 'Dark Mode'}
     </button>
   );
 };
 
-// Fallback biztonsági mintaadatok ha az API lassú vagy nem elérhető
 const mockFallbackCoupons = [
   {
     name: 'Xiaomi Mi Smart Air Fryer 3.5L Okos Forrólevegős Sütő',
@@ -78,17 +76,15 @@ const mockFallbackCoupons = [
 
 function App() {
   const [coupons, setCoupons] = useState(mockFallbackCoupons);
-  const [activeTab, setActiveTab] = useState('coupons'); // 'coupons' | 'studio' | 'feeds'
+  const [activeTab, setActiveTab] = useState('coupons');
   const [activeSheet, setActiveSheet] = useState('Összes');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDealForStudio, setSelectedDealForStudio] = useState(null);
   const [apiStatus, setApiStatus] = useState({ loading: true, error: null });
 
-  // Adatok betöltése az API végpontokból
   useEffect(() => {
     let isMounted = true;
     
-    // Először megpróbáljuk a backend API-t le kérni
     fetch('https://bifc-couponfinder.onrender.com/api/coupons')
       .then(res => {
         if (!res.ok) throw new Error('API válasz hiba');
@@ -119,49 +115,45 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Header Bar */}
       <header className="main-header">
         <div className="logo-brand">
-          <div className="logo-badge">⚡</div>
+          <div className="logo-badge">BIFC</div>
           <div>
             <h1 className="brand-title">KÍNÁBÓL VEDD MEG</h1>
             <p className="brand-subtitle">BUYITFROMCHINA - KUPONKERESŐ & DEAL STUDIO</p>
           </div>
         </div>
 
-        {/* Main Navigation Tabs */}
         <nav className="nav-tabs">
           <button 
             className={`nav-tab ${activeTab === 'coupons' ? 'active' : ''}`}
             onClick={() => setActiveTab('coupons')}
           >
-            🛒 Kuponkereső ({coupons.length})
+            Kuponkereső ({coupons.length})
           </button>
           <button 
             className={`nav-tab ${activeTab === 'studio' ? 'active' : ''}`}
             onClick={() => setActiveTab('studio')}
           >
-            ⚡ Deal Studio & Autoposzt
+            Deal Studio & Autoposzt
           </button>
           <button 
             className={`nav-tab ${activeTab === 'feeds' ? 'active' : ''}`}
             onClick={() => setActiveTab('feeds')}
           >
-            📊 Live Feeds
+            Live Feeds
           </button>
         </nav>
 
         <DarkModeToggle />
       </header>
 
-      {/* API Status Notice */}
       {apiStatus.error && (
         <div className="status-banner info">
-          <span>ℹ️ {apiStatus.error}</span>
+          <span>[INFO] {apiStatus.error}</span>
         </div>
       )}
 
-      {/* Main Content Area */}
       <main className="main-content">
         {activeTab === 'coupons' && (
           <CouponGrid 
@@ -184,22 +176,22 @@ function App() {
 
         {activeTab === 'feeds' && (
           <div className="feeds-container panel">
-            <h2>📊 Live Adatforrások & API Státusz</h2>
+            <h2>Live Adatforrások & API Státusz</h2>
             <p className="text-muted">A kuponok szinkronizációja folyamatos a Google Sheets és a Banggood API között.</p>
             
             <div className="feeds-grid">
               <div className="feed-card">
-                <h3>📊 Google Sheets Sync</h3>
+                <h3>Google Sheets Sync</h3>
                 <p><strong>Sheet ID:</strong> <code>1qw3IXBpWl...</code></p>
                 <p><strong>Laptáblák:</strong> BG Unique, BG Unique HUN, BG ALL Coupons, Geekbuying, Geekbuying Unique</p>
-                <span className="badge-status online">🟢 Aktív Szinkron</span>
+                <span className="badge-status online">[OK] Aktív Szinkron</span>
               </div>
 
               <div className="feed-card">
-                <h3>🛒 Banggood Affiliate API</h3>
+                <h3>Banggood Affiliate API</h3>
                 <p><strong>API végpont:</strong> <code>https://affapi.banggood.com/coupon/list</code></p>
                 <p><strong>Frissítés:</strong> Automatic 15 percenként</p>
-                <span className="badge-status online">🟢 API Csatlakoztatva</span>
+                <span className="badge-status online">[OK] API Csatlakoztatva</span>
               </div>
             </div>
           </div>

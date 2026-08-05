@@ -1,4 +1,3 @@
-/* eslint-disable jsx-a11y/accessible-emoji */
 import React, { useState } from 'react';
 
 const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, setSearchTerm, onSendToStudio }) => {
@@ -31,7 +30,6 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
 
   return (
     <div className="coupon-grid-section">
-      {/* Controls: Search and Store Tabs */}
       <div className="grid-controls">
         <div className="search-wrapper">
           <input
@@ -61,13 +59,11 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
         </div>
       </div>
 
-      {/* Results Header */}
       <div className="results-info">
         <span>Kuponok száma: <strong>{filteredCoupons.length} db</strong></span>
         {activeSheet !== 'Összes' && <span className="active-filter-badge">Szűrő: {activeSheet}</span>}
       </div>
 
-      {/* Coupons Grid */}
       <div className="coupons-grid">
         {filteredCoupons.length > 0 ? (
           filteredCoupons.map((coupon, index) => {
@@ -88,7 +84,7 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
                     }}
                   />
                   {coupon.source && <span className="badge-source">{coupon.source}</span>}
-                  {coupon.warehouse && <span className="badge-warehouse">📦 {coupon.warehouse}</span>}
+                  {coupon.warehouse && <span className="badge-warehouse">Raktár: {coupon.warehouse}</span>}
                 </div>
 
                 <div className="coupon-info">
@@ -119,7 +115,7 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
                         rel="noopener noreferrer" 
                         className="btn-card btn-view"
                       >
-                        🔗 Irány a bolt
+                        Irány a bolt
                       </a>
                     )}
 
@@ -127,7 +123,7 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
                       onClick={() => handleCopyCode(coupon.code)} 
                       className={`btn-card btn-copy ${copiedCode === coupon.code ? 'copied' : ''}`}
                     >
-                      {copiedCode === coupon.code ? '✅ Másolva!' : '✂ Kupon másolása'}
+                      {copiedCode === coupon.code ? '[OK] Másolva!' : 'Kupon másolása'}
                     </button>
 
                     <button 
@@ -135,7 +131,7 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
                       className="btn-card btn-studio"
                       title="Küldés a Deal Studio generátorba poszt és kép készítéséhez"
                     >
-                      ⚡ Deal Studio
+                      Deal Studio
                     </button>
                   </div>
                 </div>

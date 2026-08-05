@@ -1,20 +1,38 @@
 import React, { useState, useEffect } from 'react';
 
-const formatDisplayPrice = (rawPrice) => {
-  if (!rawPrice) return 'Lásd a linken';
+// Currency mapping by source/store
+const getCurrencyForSource = (source) => {
+  if (!source) return 'USD';
+  const s = source.toLowerCase();
+  if (s.includes('geekbuying unique')) return 'EUR';
+  if (s.includes('geekbuying')) return 'USD';
+  if (s.includes('bg unique') || s.includes('bg unique hun')) return ''; // use sheet value as-is
+  if (s.includes('banggood') || s.includes('bg all')) return 'USD';
+  if (s.includes('aliexpress') || s.includes('aliexpressapi')) return 'USD';
+  return 'USD';
+};
+
+const formatDisplayPrice = (rawPrice, source) => {
+  if (!rawPrice) return 'Lasd a linken';
   let str = String(rawPrice).trim();
 
-  if (/EUR|\$|USD|€|GBP|£/i.test(str)) {
-    str = str.replace(/Ft/gi, '').trim();
+  // Remove trailing "Ft" everywhere - we never want Ft
+  str = str.replace(/\s*Ft\s*$/gi, '').trim();
+
+  // If already has a currency symbol, just clean up and return
+  if (/EUR|USD|\$|€|GBP|£/i.test(str)) {
     return str;
   }
 
-  if (/Ft/i.test(str)) {
-    return str;
-  }
+  // Determine correct currency from source
+  const currency = getCurrencyForSource(source);
 
-  return `${str} Ft`;
+  // If no currency mapped (BG Unique - use sheet value as-is)
+  if (!currency) return str || 'Lasd a linken';
+
+  return `${str} ${currency}`;
 };
+
 
 const formatDisplayDate = (rawDate) => {
   if (!rawDate) return '';
@@ -125,7 +143,7 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
               ? coupon.image.replace('http://', 'https://')
               : 'https://images.unsplash.com/photo-1585515320310-259814833e62?auto=format&fit=crop&w=400&q=80';
 
-            const cleanPrice = formatDisplayPrice(coupon.price);
+            const cleanPrice = formatDisplayPrice(coupon.price, coupon.source);
             const cleanDate = formatDisplayDate(coupon.endTime);
 
             return (

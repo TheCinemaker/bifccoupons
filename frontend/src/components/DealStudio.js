@@ -9,6 +9,27 @@ const STORE_FILTERS = [
   { label: 'GB UNIQUE', keys: ['Geekbuying Unique'] },
 ];
 
+// Currency mapping by source/store
+const getCurrencyForSource = (source) => {
+  if (!source) return 'USD';
+  const s = source.toLowerCase();
+  if (s.includes('geekbuying unique')) return 'EUR';
+  if (s.includes('geekbuying')) return 'USD';
+  if (s.includes('bg unique')) return '';
+  if (s.includes('banggood') || s.includes('bg all')) return 'USD';
+  if (s.includes('aliexpress')) return 'USD';
+  return 'USD';
+};
+
+const formatStudioPrice = (rawPrice, source) => {
+  if (!rawPrice) return 'Lasd a linken';
+  let str = String(rawPrice).trim().replace(/\s*Ft\s*$/gi, '').trim();
+  if (/EUR|USD|\$|GBP/i.test(str)) return str;
+  const currency = getCurrencyForSource(source);
+  if (!currency) return str || 'Lasd a linken';
+  return `${str} ${currency}`;
+};
+
 const DealStudio = ({ initialDeal, availableCoupons = [] }) => {
   const [deal, setDeal] = useState({
     name: '',
@@ -89,7 +110,7 @@ const DealStudio = ({ initialDeal, availableCoupons = [] }) => {
 
   // Generate post text and first comment
   useEffect(() => {
-    const formattedPrice = deal.price ? (deal.price.includes('Ft') || deal.price.includes('$') || deal.price.includes('EUR') ? deal.price : `${deal.price} Ft`) : 'Akcios ar';
+    const formattedPrice = formatStudioPrice(deal.price, deal.source);
     const formattedCode = deal.code ? deal.code : 'Automatikus kedvezmeny';
     const formattedWarehouse = deal.warehouse ? deal.warehouse : 'EU Raktar';
 
@@ -170,14 +191,10 @@ ${deal.link || ''}`;
       }
 
       // --- Bottom price area ---
-      const priceRaw = deal.price ? String(deal.price).trim() : '';
-      const priceText = priceRaw
-        ? (priceRaw.includes('Ft') || priceRaw.includes('$') || priceRaw.includes('EUR') || priceRaw.includes('USD')
-            ? priceRaw
-            : `${priceRaw} EUR`)
-        : '';
+      const priceText = formatStudioPrice(deal.price, deal.source);
+      const hasPrice = deal.price && String(deal.price).trim();
 
-      if (priceText || deal.code) {
+      if (hasPrice || deal.code) {
         // Dark panel background
         ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
         ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';

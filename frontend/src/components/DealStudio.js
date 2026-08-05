@@ -1,15 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
+const STORE_FILTERS = [
+  { label: 'Osszes', key: 'Osszes' },
+  { label: 'BANGGOOD', keys: ['BANGGOODAPI', 'BG ALL Coupons', 'Banggood'] },
+  { label: 'BG UNIQUE', keys: ['BG Unique', 'BG Unique HUN'] },
+  { label: 'ALIEXPRESS', keys: ['ALIEXPRESSAPI', 'AliExpress ALL', 'AliExpress'] },
+  { label: 'GEEKBUYING', keys: ['Geekbuying'] },
+  { label: 'GB UNIQUE', keys: ['Geekbuying Unique'] },
+];
+
+const DealStudio = ({ initialDeal, availableCoupons = [] }) => {
   const [deal, setDeal] = useState({
-    name: 'Xiaomi Mi Smart Air Fryer 3.5L Okos Sütő',
-    price: '18990',
-    code: 'BGXIAOMI35',
-    link: 'https://www.banggood.com/custlink/353490',
-    image: 'https://images.unsplash.com/photo-1585515320310-259814833e62?auto=format&fit=crop&w=600&q=80',
-    warehouse: 'CZ Raktár',
-    source: 'Banggood'
+    name: '',
+    price: '',
+    code: '',
+    link: '',
+    image: '',
+    warehouse: '',
+    source: ''
   });
+
+  const [storeFilter, setStoreFilter] = useState('Osszes');
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerPage, setPickerPage] = useState(20);
 
   const [postText, setPostText] = useState('');
   const [commentText, setCommentText] = useState('');
@@ -33,29 +46,70 @@ const DealStudio = ({ initialDeal, availableCoupons = [], onSelectDeal }) => {
     }
   }, [initialDeal]);
 
-  // Generálja a posztszöveget és az első kommentet
+  // Reset picker page when filter or search changes
   useEffect(() => {
-    const formattedPrice = deal.price ? (deal.price.includes('Ft') || deal.price.includes('$') ? deal.price : `${deal.price} Ft`) : 'Akciós ár';
-    const formattedCode = deal.code ? deal.code : 'Automatikus kedvezmény';
-    const formattedWarehouse = deal.warehouse ? deal.warehouse : 'EU Raktár';
+    setPickerPage(20);
+  }, [storeFilter, pickerSearch]);
 
-    const postBody = `AKCIÓS AJÁNLAT!
-Termék: ${deal.name || ''}
-Akciós Ár: ${formattedPrice}
-Kuponkód: ${formattedCode}
-Raktár: ${formattedWarehouse}
+  // Filter available coupons by store + search
+  const filteredCoupons = availableCoupons.filter(c => {
+    // Store filter
+    if (storeFilter !== 'Osszes') {
+      const filterDef = STORE_FILTERS.find(f => f.label === storeFilter);
+      if (filterDef && filterDef.keys && !filterDef.keys.includes(c.source)) {
+        return false;
+      }
+    }
+    // Text search
+    if (pickerSearch) {
+      const q = pickerSearch.toLowerCase();
+      const nameMatch = c.name && c.name.toLowerCase().includes(q);
+      const codeMatch = c.code && c.code.toLowerCase().includes(q);
+      if (!nameMatch && !codeMatch) return false;
+    }
+    return true;
+  });
 
-A vásárlási linket az első kommentben találod!
-#kinabolveddmeg #akció #kupon #${(deal.source || 'akcio').toLowerCase().replace(/\s+/g, '')}`;
+  const visibleCoupons = filteredCoupons.slice(0, pickerPage);
 
-    const commentBody = `Vásárlási link a kuponos árhoz:
+  const selectProduct = (coupon) => {
+    setDeal({
+      name: coupon.name || '',
+      price: coupon.price || '',
+      code: coupon.code || '',
+      link: coupon.link || '',
+      image: coupon.image || '',
+      warehouse: coupon.warehouse || '',
+      source: coupon.source || ''
+    });
+    // Scroll to the editor area
+    const editor = document.getElementById('studio-editor');
+    if (editor) editor.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Generate post text and first comment
+  useEffect(() => {
+    const formattedPrice = deal.price ? (deal.price.includes('Ft') || deal.price.includes('$') || deal.price.includes('EUR') ? deal.price : `${deal.price} Ft`) : 'Akcios ar';
+    const formattedCode = deal.code ? deal.code : 'Automatikus kedvezmeny';
+    const formattedWarehouse = deal.warehouse ? deal.warehouse : 'EU Raktar';
+
+    const postBody = `AKCIOS AJANLAT!
+Termek: ${deal.name || ''}
+Akcios Ar: ${formattedPrice}
+Kuponkod: ${formattedCode}
+Raktar: ${formattedWarehouse}
+
+A vasarlasi linket az elso kommentben talalod!
+#kinabolveddmeg #akcio #kupon #${(deal.source || 'akcio').toLowerCase().replace(/\s+/g, '')}`;
+
+    const commentBody = `Vasarlasi link a kuponos arhoz:
 ${deal.link || ''}`;
 
     setPostText(postBody);
     setCommentText(commentBody);
   }, [deal]);
 
-  // Canvas képrejz (vízjel + ár matrica a fotóra)
+  // Canvas image generator
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -74,21 +128,21 @@ ${deal.link || ''}`;
     img.src = imageUrl;
 
     const drawCanvasOverlay = () => {
-      // Alsó sötét árnyék
+      // Bottom gradient
       const bottomGradient = ctx.createLinearGradient(0, height - 200, 0, height);
       bottomGradient.addColorStop(0, 'rgba(15, 23, 42, 0)');
       bottomGradient.addColorStop(1, 'rgba(15, 23, 42, 0.9)');
       ctx.fillStyle = bottomGradient;
       ctx.fillRect(0, height - 200, width, 200);
 
-      // Felső sötét sáv
+      // Top gradient
       const topGradient = ctx.createLinearGradient(0, 0, 0, 120);
       topGradient.addColorStop(0, 'rgba(15, 23, 42, 0.8)');
       topGradient.addColorStop(1, 'rgba(15, 23, 42, 0)');
       ctx.fillStyle = topGradient;
       ctx.fillRect(0, 0, width, 120);
 
-      // Raktár matrica bal fent
+      // Warehouse badge top-left
       if (deal.warehouse) {
         ctx.fillStyle = '#10b981';
         ctx.beginPath();
@@ -97,10 +151,10 @@ ${deal.link || ''}`;
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 18px "Plus Jakarta Sans", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`Raktár: ${deal.warehouse}`, 135, 53);
+        ctx.fillText(`Raktar: ${deal.warehouse}`, 135, 53);
       }
 
-      // Bolt matrica jobb fent
+      // Source badge top-right
       if (deal.source) {
         ctx.fillStyle = '#ff5722';
         ctx.beginPath();
@@ -112,8 +166,8 @@ ${deal.link || ''}`;
         ctx.fillText(deal.source, width - 112, 53);
       }
 
-      // Ár matrica lent
-      const priceText = deal.price ? (deal.price.includes('Ft') || deal.price.includes('$') ? deal.price : `${deal.price} Ft`) : '';
+      // Price bar bottom
+      const priceText = deal.price ? (deal.price.includes('Ft') || deal.price.includes('$') || deal.price.includes('EUR') ? deal.price : `${deal.price} Ft`) : '';
       if (priceText) {
         ctx.fillStyle = 'rgba(30, 41, 59, 0.92)';
         ctx.strokeStyle = '#00f0ff';
@@ -126,7 +180,7 @@ ${deal.link || ''}`;
         ctx.fillStyle = '#00f0ff';
         ctx.font = '800 30px "Plus Jakarta Sans", sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText(`Kuponos Ár: ${priceText}`, 45, height - 60);
+        ctx.fillText(`Kuponos Ar: ${priceText}`, 45, height - 60);
 
         if (deal.code) {
           ctx.fillStyle = '#ffb703';
@@ -136,7 +190,7 @@ ${deal.link || ''}`;
           ctx.fillStyle = '#0f172a';
           ctx.font = '800 14px "Plus Jakarta Sans", sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText('KUPONKÓD:', width - 170, height - 75);
+          ctx.fillText('KUPONKOD:', width - 170, height - 75);
           ctx.font = '800 22px "Plus Jakarta Sans", sans-serif';
           ctx.fillText(deal.code, width - 170, height - 48);
         }
@@ -157,7 +211,7 @@ ${deal.link || ''}`;
       ctx.fillStyle = '#94a3b8';
       ctx.font = 'bold 24px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(deal.name || 'Termékkép', width / 2, height / 2);
+      ctx.fillText(deal.name || 'Termekkep', width / 2, height / 2);
       drawCanvasOverlay();
     };
   }, [deal]);
@@ -205,63 +259,129 @@ ${deal.link || ''}`;
   return (
     <div className="deal-studio-container">
       <div className="studio-header">
-        <h2>Facebook Poszt & Komment Generáló Studio</h2>
-        <p>Válassz kuponos ajánlatot a táblázatból, másold ki a posztszöveget, az első kommentet és a képet 1 kattintással!</p>
+        <h2>Facebook Poszt & Komment Generalo Studio</h2>
+        <p>Valassz terméket boltonkent szurve, majd masold ki a posztszoveget, az elso kommentet es a kepet!</p>
       </div>
 
-      <div className="studio-layout">
-        {/* Bal oldali oszlop: Szövegek & Másolók */}
-        <div className="studio-panel">
-          <h3>1. FB Poszt & Első Komment Adatok</h3>
+      {/* Product Picker with Store Filter Tabs */}
+      {availableCoupons.length > 0 && (
+        <div className="studio-picker-section">
+          <h3>Termek kivalasztasa ({filteredCoupons.length} db)</h3>
 
-          {availableCoupons.length > 0 && (
-            <div className="form-group">
-              <label className="form-label">Termék kiválasztása a táblázatból ({availableCoupons.length} db):</label>
-              <select 
-                className="form-select"
-                onChange={(e) => {
-                  const idx = parseInt(e.target.value);
-                  if (availableCoupons[idx]) {
-                    setDeal(availableCoupons[idx]);
-                  }
-                }}
-              >
-                <option value="">-- Válassz a beolvasott kuponokból --</option>
-                {availableCoupons.slice(0, 100).map((c, i) => (
-                  <option key={i} value={i}>
-                    {c.source} | {c.name ? c.name.substring(0, 55) : 'Névtelen'} ({c.price} - {c.code})
-                  </option>
-                ))}
-              </select>
+          {/* Store filter pills */}
+          <div className="tabs-scroll-wrapper" style={{marginTop: '0.75rem'}}>
+            <div className="tabs-container">
+              {STORE_FILTERS.map(f => (
+                <button
+                  key={f.label}
+                  className={`tab-pill ${f.label === storeFilter ? 'active' : ''}`}
+                  onClick={() => setStoreFilter(f.label)}
+                >
+                  {f.label}
+                </button>
+              ))}
             </div>
+          </div>
+
+          {/* Search within filtered */}
+          <div className="search-wrapper" style={{marginTop: '0.75rem'}}>
+            <input
+              type="text"
+              placeholder="Kereses termeknevre vagy kuponkodra..."
+              value={pickerSearch}
+              onChange={e => setPickerSearch(e.target.value)}
+              className="mac-input"
+            />
+            {pickerSearch && (
+              <span className="clear-icon" onClick={() => setPickerSearch('')}>x</span>
+            )}
+          </div>
+
+          {/* Product list */}
+          <div className="studio-product-list">
+            {visibleCoupons.map((c, idx) => {
+              const thumbUrl = c.image ? c.image.replace('http://', 'https://') : '';
+              const isSelected = deal.name === c.name && deal.code === c.code && deal.source === c.source;
+              return (
+                <div
+                  key={idx}
+                  className={`studio-product-item ${isSelected ? 'selected' : ''}`}
+                  onClick={() => selectProduct(c)}
+                >
+                  <div className="product-item-thumb">
+                    {thumbUrl ? (
+                      <img
+                        src={thumbUrl}
+                        alt={c.name}
+                        referrerPolicy="no-referrer"
+                        onError={e => { e.target.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="product-item-no-img">--</div>
+                    )}
+                  </div>
+                  <div className="product-item-info">
+                    <span className="product-item-name">{c.name ? c.name.substring(0, 65) : 'Nevtelen'}</span>
+                    <div className="product-item-meta">
+                      <span className="product-item-source">{c.source}</span>
+                      {c.code && <span className="product-item-code">{c.code}</span>}
+                      {c.price && <span className="product-item-price">{c.price}</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {visibleCoupons.length === 0 && (
+              <div style={{padding: '1.5rem', textAlign: 'center', color: 'var(--mac-text-muted)'}}>
+                Nincs talalat a megadott szurokkel.
+              </div>
+            )}
+          </div>
+
+          {pickerPage < filteredCoupons.length && (
+            <button
+              className="btn-mac btn-mac-secondary"
+              style={{width: '100%', marginTop: '0.75rem'}}
+              onClick={() => setPickerPage(p => p + 20)}
+            >
+              Tovabbiak betoltese ({filteredCoupons.length - pickerPage} maradt)
+            </button>
           )}
+        </div>
+      )}
+
+      {/* Editor + Image Generator */}
+      <div className="studio-layout" id="studio-editor">
+        {/* Left column: Text editor */}
+        <div className="studio-panel">
+          <h3>FB Poszt & Elso Komment Adatok</h3>
 
           <div className="form-group">
-            <label className="form-label">Termék Neve:</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              value={deal.name || ''} 
+            <label className="form-label">Termek Neve:</label>
+            <input
+              type="text"
+              className="mac-input"
+              value={deal.name || ''}
               onChange={e => setDeal({...deal, name: e.target.value})}
             />
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Kuponos Ár:</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={deal.price || ''} 
+              <label className="form-label">Kuponos Ar:</label>
+              <input
+                type="text"
+                className="mac-input"
+                value={deal.price || ''}
                 onChange={e => setDeal({...deal, price: e.target.value})}
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Kuponkód:</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={deal.code || ''} 
+              <label className="form-label">Kuponkod:</label>
+              <input
+                type="text"
+                className="mac-input"
+                value={deal.code || ''}
                 onChange={e => setDeal({...deal, code: e.target.value})}
               />
             </div>
@@ -269,77 +389,89 @@ ${deal.link || ''}`;
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Raktár:</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={deal.warehouse || ''} 
+              <label className="form-label">Raktar:</label>
+              <input
+                type="text"
+                className="mac-input"
+                value={deal.warehouse || ''}
                 onChange={e => setDeal({...deal, warehouse: e.target.value})}
               />
             </div>
             <div className="form-group">
               <label className="form-label">Bolt:</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={deal.source || ''} 
+              <input
+                type="text"
+                className="mac-input"
+                value={deal.source || ''}
                 onChange={e => setDeal({...deal, source: e.target.value})}
               />
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">Vásárlási Link (Első kommentbe):</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              value={deal.link || ''} 
+            <label className="form-label">Vasarlasi Link (Elso kommentbe):</label>
+            <input
+              type="text"
+              className="mac-input"
+              value={deal.link || ''}
               onChange={e => setDeal({...deal, link: e.target.value})}
             />
           </div>
 
-          {/* Fő Posztszöveg Terület */}
-          <div className="form-group" style={{marginTop: '1.25rem'}}>
-            <label className="form-label">Fő Facebook Posztszöveg (Kép mellé):</label>
-            <textarea 
-              className="form-textarea post-output" 
-              value={postText} 
-              readOnly 
-              rows={6}
+          <div className="form-group">
+            <label className="form-label">Kep URL (A oszlopbol automatikusan):</label>
+            <input
+              type="text"
+              className="mac-input"
+              value={deal.image || ''}
+              onChange={e => setDeal({...deal, image: e.target.value})}
             />
-            <button 
-              className={`btn-action ${copyPostSuccess ? 'btn-success' : 'btn-primary'}`} 
+          </div>
+
+          {/* Post text area */}
+          <div className="form-group" style={{marginTop: '1.25rem'}}>
+            <label className="form-label">Fo Facebook Posztszoveg (Kep melle):</label>
+            <textarea
+              className="mac-input"
+              value={postText}
+              readOnly
+              rows={6}
+              style={{resize: 'none'}}
+            />
+            <button
+              className={`btn-mac ${copyPostSuccess ? 'btn-mac-primary' : 'btn-mac-secondary'}`}
               onClick={handleCopyPost}
               style={{width: '100%', marginTop: '0.5rem'}}
             >
-              {copyPostSuccess ? '[OK] Fő Posztszöveg Másolva!' : 'Fő Posztszöveg Másolása'}
+              {copyPostSuccess ? '[OK] Fo Posztszoveg Masolva!' : 'Fo Posztszoveg Masolasa'}
             </button>
           </div>
 
-          {/* Első Komment Terület */}
+          {/* First comment area */}
           <div className="form-group" style={{marginTop: '1.25rem'}}>
-            <label className="form-label">Első Komment Szövege (Közvetlen Vásárlási Link):</label>
-            <textarea 
-              className="form-textarea post-output" 
-              value={commentText} 
-              readOnly 
+            <label className="form-label">Elso Komment Szovege (Kozvetlen Vasarlasi Link):</label>
+            <textarea
+              className="mac-input"
+              value={commentText}
+              readOnly
               rows={3}
+              style={{resize: 'none'}}
             />
-            <button 
-              className={`btn-action ${copyCommentSuccess ? 'btn-success' : 'btn-secondary'}`} 
+            <button
+              className={`btn-mac ${copyCommentSuccess ? 'btn-mac-primary' : 'btn-mac-secondary'}`}
               onClick={handleCopyComment}
               style={{width: '100%', marginTop: '0.5rem'}}
             >
-              {copyCommentSuccess ? '[OK] Első Komment Másolva!' : 'Első Komment Másolása'}
+              {copyCommentSuccess ? '[OK] Elso Komment Masolva!' : 'Elso Komment Masolasa'}
             </button>
           </div>
         </div>
 
-        {/* Jobb oldali oszlop: Kép Másolás & Letöltés */}
+        {/* Right column: Image generator */}
         <div className="studio-panel">
-          <h3>2. Posztolható Termékkép</h3>
-          <p style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>
-            Töltsd le vagy másold a képet, és csatold a Facebook poszthoz a maximális elérésért!
+          <h3>Posztolhato Termekkep</h3>
+          <p style={{fontSize: '0.85rem', color: 'var(--mac-text-muted)'}}>
+            A kep automatikusan az A oszlopbol (image) toltodik be. Toltsd le vagy masold!
           </p>
 
           <div className="canvas-preview-container" style={{marginTop: '1rem'}}>
@@ -347,18 +479,18 @@ ${deal.link || ''}`;
           </div>
 
           <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.25rem'}}>
-            <button 
-              className={`btn-action ${copyImageSuccess ? 'btn-success' : 'btn-primary'}`} 
+            <button
+              className={`btn-mac ${copyImageSuccess ? 'btn-mac-primary' : 'btn-mac-secondary'}`}
               onClick={handleCopyImageToClipboard}
             >
-              {copyImageSuccess ? '[OK] Kép Másolva Vágólapra!' : 'Kép Másolása Vágólapra'}
+              {copyImageSuccess ? '[OK] Kep Masolva Vagolapra!' : 'Kep Masolasa Vagolapra'}
             </button>
 
-            <button 
-              className="btn-action btn-secondary" 
+            <button
+              className="btn-mac btn-mac-secondary"
               onClick={handleDownloadImage}
             >
-              Kép Letöltése HD PNG-ben
+              Kep Letoltese HD PNG-ben
             </button>
           </div>
         </div>

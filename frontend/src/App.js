@@ -101,6 +101,12 @@ function App() {
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const switchTab = (tab) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -165,25 +171,39 @@ function App() {
   return (
     <div className="app-container">
       <header className="main-header">
-        <div className="logo-brand">
-          <div className="logo-badge">KINABOLVEDDMEG</div>
-          <div>
-            <h1 className="brand-title">KINABOLVEDDMEG</h1>
-            <p className="brand-subtitle">BUYITFROMCHINA - PREMIUMLISZTÁLT KUPONOK ÉS AKCIÓK</p>
+        <div className="header-top-row">
+          <div className="logo-brand">
+            <div>
+              <h1 className="brand-title">KINABOLVEDDMEG</h1>
+              <p className="brand-subtitle">BUYITFROMCHINA - PREMIUMLISZTALT KUPONOK ES AKCIOK</p>
+            </div>
+          </div>
+
+          <div className="header-right-controls">
+            <DarkModeToggle />
+            <button
+              className={`hamburger-btn ${mobileMenuOpen ? 'is-open' : ''}`}
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Menu"
+            >
+              <span className="hamburger-bar"></span>
+              <span className="hamburger-bar"></span>
+              <span className="hamburger-bar"></span>
+            </button>
           </div>
         </div>
 
-        <nav className="nav-tabs">
+        <nav className={`nav-tabs ${mobileMenuOpen ? 'mobile-open' : ''}`}>
           <button 
             className={`nav-tab ${activeTab === 'coupons' ? 'active' : ''}`}
-            onClick={() => setActiveTab('coupons')}
+            onClick={() => switchTab('coupons')}
           >
-            Kínálat ({coupons.length})
+            Kinalat ({coupons.length})
           </button>
           
           <button 
             className={`nav-tab ${activeTab === 'reviews' ? 'active' : ''}`}
-            onClick={() => setActiveTab('reviews')}
+            onClick={() => switchTab('reviews')}
           >
             Tesztek & Unboxing
           </button>
@@ -192,13 +212,13 @@ function App() {
             <>
               <button 
                 className={`nav-tab admin-tab ${activeTab === 'studio' ? 'active' : ''}`}
-                onClick={() => setActiveTab('studio')}
+                onClick={() => switchTab('studio')}
               >
                 Deal Studio
               </button>
               <button 
                 className={`nav-tab admin-tab ${activeTab === 'feeds' ? 'active' : ''}`}
-                onClick={() => setActiveTab('feeds')}
+                onClick={() => switchTab('feeds')}
               >
                 Live Feeds
               </button>
@@ -207,13 +227,11 @@ function App() {
 
           <button 
             className={`nav-tab lock-tab ${isAdmin ? 'logged-in' : ''}`}
-            onClick={handleAdminClick}
+            onClick={() => { handleAdminClick(); setMobileMenuOpen(false); }}
           >
-            {isAdmin ? 'Admin (Kijelentkezés)' : 'Admin Belépés'}
+            {isAdmin ? 'Admin (Kijelentkezes)' : 'Admin Belepes'}
           </button>
         </nav>
-
-        <DarkModeToggle />
       </header>
 
       {apiStatus.loading && (
@@ -246,7 +264,7 @@ function App() {
         )}
 
         {isAdmin && activeTab === 'studio' && (
-          <DealStudio selectedCoupon={selectedDealForStudio} />
+          <DealStudio initialDeal={selectedDealForStudio} availableCoupons={coupons} />
         )}
 
         {isAdmin && activeTab === 'feeds' && (

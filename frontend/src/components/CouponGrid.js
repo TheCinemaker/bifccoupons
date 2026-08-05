@@ -4,7 +4,7 @@ const CouponGrid = ({ coupons = [], activeSheet, setActiveSheet, searchTerm, set
   const [copiedCode, setCopiedCode] = useState(null);
   const [visibleCount, setVisibleCount] = useState(36);
 
-  const sheets = ['Összes', 'BG Unique', 'BG Unique HUN', 'BG ALL Coupons', 'AliExpress ALL', 'Geekbuying', 'Geekbuying Unique'];
+  const sheets = ['Összes', 'BG Unique', 'BG Unique HUN', 'BANGGOODAPI', 'ALIEXPRESSAPI', 'Geekbuying', 'Geekbuying Unique'];
 
   useEffect(() => {
     setVisibleCount(36);

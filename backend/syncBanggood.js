@@ -1,3 +1,7 @@
+const buffer = require('buffer');
+if (!buffer.SlowBuffer) {
+  buffer.SlowBuffer = buffer.Buffer;
+}
 const axios = require('axios');
 const md5 = require('md5');
 const { GoogleSpreadsheet } = require('google-spreadsheet');
@@ -77,7 +81,7 @@ async function fetchAllBanggoodCoupons() {
           endTime: c.coupon_date_end || '',
           updateTime: new Date().toISOString().replace('T', ' ').substring(0, 16),
           shortlink: c.promo_link_short || c.promo_link_standard || '',
-          source: 'BG ALL Coupons'
+          source: 'BANGGOODAPI'
         };
       });
 
@@ -94,52 +98,13 @@ async function fetchAllBanggoodCoupons() {
   return allCoupons;
 }
 
+const { writeRowsToSheet } = require('./googleSheetsRest');
+
 async function syncToGoogleSheet(coupons) {
-  const authOptions = { scopes: ['https://www.googleapis.com/auth/spreadsheets'] };
-  if (process.env.GOOGLE_CREDENTIALS_JSON) {
-    authOptions.credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
-  } else if (fs.existsSync(CREDENTIALS_PATH)) {
-    authOptions.keyFile = CREDENTIALS_PATH;
-  }
-
-  const auth = new GoogleAuth(authOptions);
-  const client = await auth.getClient();
-  const doc = new GoogleSpreadsheet(SPREADSHEET_ID, client);
-
-  await doc.loadInfo();
-  let sheet = doc.sheetsByTitle['BG ALL Coupons'] || doc.sheetsByTitle['Banggood'];
-
-  if (!sheet) {
-    sheet = await doc.addSheet({ title: 'BG ALL Coupons' });
-  }
-
-  console.log(`Google Sheets lap frissítése: [${sheet.title}]...`);
-  await sheet.clear();
-  await sheet.setHeaderRow([
-    'image', 'name', 'link', 'price', 'code', 'warehouse', 'endTime', 'updateTime', 'shortlink'
-  ]);
-
-  const rows = coupons.map(c => ({
-    'image': c.image,
-    'name': c.name,
-    'link': c.link,
-    'price': c.price,
-    'code': c.code,
-    'warehouse': c.warehouse,
-    'endTime': c.endTime,
-    'updateTime': c.updateTime,
-    'shortlink': c.shortlink
-  }));
-
-  // Batch insert sorok
-  const chunkSize = 500;
-  for (let i = 0; i < rows.length; i += chunkSize) {
-    const chunk = rows.slice(i, i + chunkSize);
-    await sheet.addRows(chunk);
-    console.log(`Hozzáadva ${i + chunk.length} / ${rows.length} sor...`);
-  }
-
-  console.log('[OK] Google Sheet sikeresen frissítve a 9 oszlopos sémával rendelkező Banggood kuponokkal!');
+  console.log(`Google Sheets lap frissítése: [BANGGOODAPI] (${coupons.length} db kupon)...`);
+  const headers = ['image', 'name', 'link', 'price', 'code', 'warehouse', 'endTime', 'updateTime', 'shortlink'];
+  await writeRowsToSheet('BANGGOODAPI', headers, coupons);
+  console.log('[OK] Google Sheet (BANGGOODAPI) sikeresen frissítve!');
 }
 
 async function main() {

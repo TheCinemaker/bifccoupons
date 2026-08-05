@@ -29,7 +29,7 @@ const DarkModeToggle = () => {
 };
 
 const SPREADSHEET_ID = '1qw3IXBpWlRx-ZFSueFaiPfA44lpMd1b5-MhnSIRwzMc';
-const SHEET_NAMES = ['BG Unique', 'BG Unique HUN', 'BG ALL Coupons', 'AliExpress ALL', 'Geekbuying', 'Geekbuying Unique'];
+const SHEET_NAMES = ['BG Unique', 'BG Unique HUN', 'BANGGOODAPI', 'ALIEXPRESSAPI', 'Geekbuying', 'Geekbuying Unique'];
 
 async function fetchLiveGoogleSheet(sheetName) {
   const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;

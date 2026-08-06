@@ -257,15 +257,6 @@ const ReviewsPage = ({ isAdmin }) => {
             <button
               type="button"
               className="btn-mac btn-mac-secondary"
-              onClick={() => setIsTokenModalOpen(true)}
-              title="GitHub API Token beállítása az automatikus deployhoz"
-            >
-              {ghToken ? 'GitHub Token Beállítva' : 'GitHub Token Beállítása'}
-            </button>
-
-            <button
-              type="button"
-              className="btn-mac btn-mac-secondary"
               onClick={handleDownloadJson}
               title="Letölti a meglévő teszteket reviews.json fájlként"
             >
@@ -399,47 +390,7 @@ const ReviewsPage = ({ isAdmin }) => {
                   Mégse
                 </button>
                 <button type="submit" className="btn-mac btn-mac-primary">
-                  Teszt Mentése & Automatikus Deploy
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {isTokenModalOpen && isAdmin && (
-        <div className="modal-overlay" onClick={() => setIsTokenModalOpen(false)}>
-          <div className="admin-modal-card review-form-card" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>GitHub API Token Beállítása</h3>
-              <button type="button" className="modal-close" onClick={() => setIsTokenModalOpen(false)} aria-label="Bezárás">
-                &times;
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveToken} className="admin-form">
-              <p className="admin-instruction">
-                Add meg a GitHub Personal Access Token-edet (PAT). Ennek segítségével a "Teszt Mentése" gomb automatikusan 
-                feltölti az új JSON-t a GitHub repóba, ami azonnal elindítja a Netlify deployt!
-              </p>
-
-              <div className="form-group">
-                <label>GitHub Personal Access Token (ghp_... vagy github_pat_...)</label>
-                <input 
-                  type="password" 
-                  value={ghToken} 
-                  onChange={e => setGhToken(e.target.value)}
-                  placeholder="ghp_..."
-                  className="mac-input"
-                />
-              </div>
-
-              <div className="modal-actions">
-                <button type="button" className="btn-mac btn-mac-secondary" onClick={() => setIsTokenModalOpen(false)}>
-                  Mégse
-                </button>
-                <button type="submit" className="btn-mac btn-mac-primary">
-                  Token Mentése
+                  Teszt Mentése
                 </button>
               </div>
             </form>

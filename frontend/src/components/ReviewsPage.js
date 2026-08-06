@@ -1,33 +1,12 @@
 import React, { useState, useEffect } from 'react';
-
-const INITIAL_REVIEWS = [
-  {
-    id: '1',
-    title: 'Xiaomi Smart Band 8 Pro Teszt & Unboxing',
-    category: 'Okosóra & Aktivitásmérő',
-    image: 'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?auto=format&fit=crop&w=800&q=80',
-    description: 'Kicsomagoltuk és 2 hétig teszteltük a Xiaomi legújabb AMOLED kijelzős okoskarkötőjét. A GPS pontossága kiváló, az akkumulátor üzemidő pedig valóban eléri a 14 napot.',
-    link: 'https://www.banggood.com',
-    code: 'BGXMBAND8',
-    price: '18 900 Ft',
-    date: '2026-08-01'
-  },
-  {
-    id: '2',
-    title: 'BlitzWolf BW-V5 Max Projektor Teszt',
-    category: 'Házimozi & Projektorok',
-    image: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=800&q=80',
-    description: 'Valódi 1080p Full HD felbontás Android TV rendszerrel. Kipróbáltuk sötétített szobában és nappali fénynél is. Ennyi pénzért elképesztő képminőséget nyújt.',
-    link: 'https://www.banggood.com',
-    code: 'BGV5MAX',
-    price: '34 500 Ft',
-    date: '2026-07-28'
-  }
-];
+import defaultReviews from '../data/reviews.json';
 
 const ReviewsPage = ({ isAdmin }) => {
   const [reviews, setReviews] = useState([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importJsonText, setImportJsonText] = useState('');
+  const [copyNotice, setCopyNotice] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     category: 'Elektronika',
@@ -39,21 +18,52 @@ const ReviewsPage = ({ isAdmin }) => {
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem('kinabolveddmeg_reviews');
-    if (saved) {
+    let isMounted = true;
+    
+    const loadReviews = async () => {
+      let initialData = defaultReviews;
       try {
-        setReviews(JSON.parse(saved));
+        const res = await fetch('/reviews.json');
+        if (res.ok) {
+          const remoteJson = await res.json();
+          if (Array.isArray(remoteJson) && remoteJson.length > 0) {
+            initialData = remoteJson;
+          }
+        }
       } catch (e) {
-        setReviews(INITIAL_REVIEWS);
+        console.log('Online reviews.json fetch fallback to local static json');
       }
-    } else {
-      setReviews(INITIAL_REVIEWS);
-    }
+
+      const saved = localStorage.getItem('kinabolveddmeg_reviews');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            if (isMounted) setReviews(parsed);
+            return;
+          }
+        } catch (e) {
+          console.error('Error parsing localStorage reviews', e);
+        }
+      }
+
+      if (isMounted) setReviews(initialData);
+    };
+
+    loadReviews();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const saveReviews = (updated) => {
     setReviews(updated);
-    localStorage.setItem('kinabolveddmeg_reviews', JSON.stringify(updated));
+    try {
+      localStorage.setItem('kinabolveddmeg_reviews', JSON.stringify(updated));
+    } catch (e) {
+      console.error('Failed to save to localStorage', e);
+    }
   };
 
   const handleAddReview = (e) => {
@@ -85,6 +95,53 @@ const ReviewsPage = ({ isAdmin }) => {
     }
   };
 
+  const handleDownloadJson = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(reviews, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "reviews.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const handleCopyJson = () => {
+    const jsonStr = JSON.stringify(reviews, null, 2);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(jsonStr);
+      setCopyNotice(true);
+      setTimeout(() => setCopyNotice(false), 2000);
+    }
+  };
+
+  const handleImportSubmit = (e) => {
+    e.preventDefault();
+    if (!importJsonText.trim()) return;
+    try {
+      const parsed = JSON.parse(importJsonText);
+      if (Array.isArray(parsed)) {
+        saveReviews(parsed);
+        setIsImportOpen(false);
+        setImportJsonText('');
+        alert('Tesztek sikeresen importálva!');
+      } else {
+        alert('Érvénytelen JSON formátum! A JSON fájlnak egy tömbnek (array) kell lennie.');
+      }
+    } catch (err) {
+      alert('Hibás JSON szintaxis: ' + err.message);
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      setImportJsonText(evt.target.result);
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="reviews-page">
       <div className="reviews-header-banner">
@@ -92,13 +149,42 @@ const ReviewsPage = ({ isAdmin }) => {
         <p>Saját tapasztalatok, tesztek és kicsomagoló leírások a KÍNÁBÓLVEDDMEG csapatától.</p>
 
         {isAdmin && (
-          <button
-            type="button"
-            className="btn-mac btn-mac-primary mt-16"
-            onClick={() => setIsFormOpen(true)}
-          >
-            Új teszt / unboxing hozzáadása
-          </button>
+          <div className="admin-review-actions mt-16" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn-mac btn-mac-primary"
+              onClick={() => setIsFormOpen(true)}
+            >
+              Új teszt / unboxing hozzáadása
+            </button>
+
+            <button
+              type="button"
+              className="btn-mac btn-mac-secondary"
+              onClick={handleDownloadJson}
+              title="Letölti a meglévő teszteket reviews.json fájlként"
+            >
+              reviews.json letöltése
+            </button>
+
+            <button
+              type="button"
+              className="btn-mac btn-mac-secondary"
+              onClick={handleCopyJson}
+              title="Kimásolja az összes teszt JSON kódját a vágólapra"
+            >
+              {copyNotice ? 'JSON kimásolva!' : 'JSON másolása'}
+            </button>
+
+            <button
+              type="button"
+              className="btn-mac btn-mac-secondary"
+              onClick={() => setIsImportOpen(true)}
+              title="JSON adatok importálása vagy beillesztése"
+            >
+              JSON importálása
+            </button>
+          </div>
         )}
       </div>
 
@@ -209,6 +295,52 @@ const ReviewsPage = ({ isAdmin }) => {
         </div>
       )}
 
+      {isImportOpen && isAdmin && (
+        <div className="modal-overlay" onClick={() => setIsImportOpen(false)}>
+          <div className="admin-modal-card review-form-card" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>JSON Tesztek Importálása</h3>
+              <button type="button" className="modal-close" onClick={() => setIsImportOpen(false)} aria-label="Bezárás">
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleImportSubmit} className="admin-form">
+              <div className="form-group">
+                <label>Fájl kiválasztása (reviews.json)</label>
+                <input 
+                  type="file" 
+                  accept=".json" 
+                  onChange={handleFileUpload}
+                  className="mac-input"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Vagy illeszd be a JSON tartalmat közvetlenül:</label>
+                <textarea 
+                  rows="8" 
+                  value={importJsonText} 
+                  onChange={e => setImportJsonText(e.target.value)}
+                  placeholder='[ { "id": "1", "title": "...", ... } ]'
+                  className="mac-input"
+                  style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
+                ></textarea>
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-mac btn-mac-secondary" onClick={() => setIsImportOpen(false)}>
+                  Mégse
+                </button>
+                <button type="submit" className="btn-mac btn-mac-primary">
+                  Importálás és mentés
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="reviews-grid">
         {reviews.length === 0 && (
           <div className="empty-state">
@@ -269,3 +401,4 @@ const ReviewsPage = ({ isAdmin }) => {
 };
 
 export default ReviewsPage;
+

@@ -3,29 +3,81 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="referrer" content="no-referrer" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
     <meta name="theme-color" content="#101114" />
+    <meta http-equiv="content-language" content="hu" />
+    <meta name="geo.region" content="HU" />
+    <meta name="geo.placename" content="Hungary" />
 
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <!-- Favicon & Touch Icons -->
+    <link rel="icon" type="image/svg+xml" href="%PUBLIC_URL%/favicon.svg" />
+    <link rel="alternate icon" type="image/x-icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://docs.google.com" />
+    <link rel="preconnect" href="https://img.gkbcdn.com" />
 
-    <meta name="description" content="KÍNÁBÓLVEDDMEG — Banggood, AliExpress és Geekbuying kuponok, akciók egy helyen, élő frissítéssel." />
-    <meta name="keywords" content="kuponok, akciók, kedvezmény, banggood, aliexpress, geekbuying, gshopper" />
-    <meta name="robots" content="index, follow" />
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://kinabolveddmeg.hu/" />
+
+    <!-- Primary Search Engine Meta Tags -->
+    <title>KÍNÁBÓLVEDDMEG — Kínai Kuponok, Akciók, Banggood, AliExpress, Geekbuying Tesztek</title>
+    <meta name="description" content="KÍNÁBÓLVEDDMEG — A legjobb Banggood, AliExpress és Geekbuying kuponok, napi akciók, magyar nyelvű terméktesztek és unboxing cikkek egy helyen, élő frissítéssel." />
+    <meta name="keywords" content="KÍNÁBÓLVEDDMEG, kinabolveddmeg, kínai kuponok, banggood kupon, aliexpress kuponok, geekbuying kupon, akciós termékek, unboxing tesztek, kína vásárlás, eu raktár" />
+    <meta name="author" content="KÍNÁBÓLVEDDMEG" />
+    <meta name="publisher" content="KÍNÁBÓLVEDDMEG" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+
+    <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="KÍNÁBÓLVEDDMEG — Kuponkereső" />
-    <meta property="og:description" content="A legjobb Banggood, AliExpress és Geekbuying kuponok egy helyen." />
+    <meta property="og:site_name" content="KÍNÁBÓLVEDDMEG" />
+    <meta property="og:url" content="https://kinabolveddmeg.hu/" />
+    <meta property="og:title" content="KÍNÁBÓLVEDDMEG — Kínai Kuponok & Akciók Élőben" />
+    <meta property="og:description" content="Prémium Banggood, AliExpress és Geekbuying kuponok, kedvezmények, magyar terméktesztek és unboxing leírások." />
     <meta property="og:image" content="%PUBLIC_URL%/logo512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:locale" content="hu_HU" />
 
-    <!--
-      Téma beállítása MÉG a React betöltése előtt.
-      Enélkül a mentett világos mód esetén egy pillanatra felvillanna a sötét háttér.
-    -->
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="KÍNÁBÓLVEDDMEG — Kínai Kuponok & Akciók" />
+    <meta name="twitter:description" content="Élő kuponkereső és magyar nyelvű tesztek a legjobb kínai webáruházak termékeihez." />
+    <meta name="twitter:image" content="%PUBLIC_URL%/logo512.png" />
+
+    <!-- Schema.org Structured Data (JSON-LD) for Search Engines -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://kinabolveddmeg.hu/#website",
+            "url": "https://kinabolveddmeg.hu/",
+            "name": "KÍNÁBÓLVEDDMEG",
+            "description": "Banggood, AliExpress és Geekbuying kuponok, akciók és magyar terméktesztek egy helyen.",
+            "inLanguage": "hu-HU",
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": "https://kinabolveddmeg.hu/?q={search_term_string}",
+              "query-input": "required name=search_term_string"
+            }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://kinabolveddmeg.hu/#organization",
+            "name": "KÍNÁBÓLVEDDMEG",
+            "url": "https://kinabolveddmeg.hu/",
+            "logo": "https://kinabolveddmeg.hu/logo512.png"
+          }
+        ]
+      }
+    </script>
+
+    <!-- Theme initialization inline script -->
     <script>
       (function () {
         try {
@@ -43,7 +95,7 @@
       })();
     </script>
 
-    <!-- Google Tag Manager -->
+    <!-- Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-YXHGD0P262"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -51,8 +103,6 @@
       gtag('js', new Date());
       gtag('config', 'G-YXHGD0P262');
     </script>
-
-    <title>KÍNÁBÓLVEDDMEG — Kuponkereső</title>
   </head>
   <body>
     <noscript>Az alkalmazás futtatásához engedélyezned kell a JavaScriptet.</noscript>

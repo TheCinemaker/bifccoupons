@@ -393,9 +393,22 @@ function App() {
     setIsAdminModalOpen(false);
   };
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  useEffect(() => {
+    switch (activeTab) {
+      case 'reviews':
+        document.title = 'KÍNÁBÓLVEDDMEG — Magyar Terméktesztek & Unboxing Cikkek';
+        break;
+      case 'studio':
+        document.title = 'KÍNÁBÓLVEDDMEG — Deal Studio Admin';
+        break;
+      case 'feeds':
+        document.title = 'KÍNÁBÓLVEDDMEG — Élő Adatcsatornák';
+        break;
+      default:
+        document.title = 'KÍNÁBÓLVEDDMEG — Kínai Kuponok, Akciók, Banggood, AliExpress, Geekbuying';
+        break;
+    }
+  }, [activeTab]);
 
   return (
     <div className="app-root">
@@ -552,6 +565,38 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* SEO Semantikus Lábléc */}
+      <footer className="seo-footer">
+        <div className="seo-footer-inner">
+          <section className="seo-info-block">
+            <h2>KÍNÁBÓLVEDDMEG — A legjobb kínai kuponok és akciók gyűjtőhelye</h2>
+            <p>
+              A KÍNÁBÓLVEDDMEG segítségével naponta több ezer frissülő Banggood, AliExpress és Geekbuying kuponkód közül válogathatsz. 
+              Célunk, hogy a legkedvezőbb árakat, EU raktáras ajánlatokat és tesztelt termékeket közvetlenül elhozzuk a vásárlóknak.
+            </p>
+          </section>
+
+          <section className="seo-faq-grid">
+            <div className="seo-faq-item">
+              <h3>Hogyan működik a kuponkódok másolása?</h3>
+              <p>A kuponkódra vagy a kártyára kattintva a kuponkód azonnal a vágólapodra kerül, amit a webáruház pénztáránál beilleszthetsz.</p>
+            </div>
+            <div className="seo-faq-item">
+              <h3>Mit jelent az EU raktár jelölés?</h3>
+              <p>Az EU raktárból érkező termékek gyorsan, általában 3-7 munkanap alatt megérkeznek, és vámmentesen kerülnek kézbesítésre.</p>
+            </div>
+            <div className="seo-faq-item">
+              <h3>Milyen gyakran frissül az adatbázis?</h3>
+              <p>Az élő adatbázis folyamatosan frissül automatikus GitHub szinkronizációval a Google Sheets táblázatainkból.</p>
+            </div>
+          </section>
+
+          <div className="seo-footer-bottom">
+            <p>© 2026 KÍNÁBÓLVEDDMEG — Minden jog fenntartva.</p>
+          </div>
+        </div>
+      </footer>
 
       <button
         type="button"

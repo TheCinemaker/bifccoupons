@@ -2609,3 +2609,75 @@ textarea.mac-input {
   font-weight: 700;
   text-align: center;
 }
+
+/* ============================================================
+   SEO Footer Stílusok
+   ============================================================ */
+
+.seo-footer {
+  margin-top: 48px;
+  padding: 40px 20px 32px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.seo-footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.seo-info-block h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.seo-info-block p {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-2);
+  max-width: 900px;
+}
+
+.seo-faq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.seo-faq-item {
+  background: var(--fill);
+  padding: 16px 20px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+}
+
+.seo-faq-item h3 {
+  font-size: 0.92rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.seo-faq-item p {
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.seo-footer-bottom {
+  border-top: 1px solid var(--separator);
+  padding-top: 20px;
+  text-align: center;
+}
+
+.seo-footer-bottom p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+

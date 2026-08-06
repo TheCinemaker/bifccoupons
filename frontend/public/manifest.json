@@ -1,7 +1,14 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "KÍNÁBÓLVEDDMEG",
+  "name": "KÍNÁBÓLVEDDMEG — Prémium Kínai Kuponok & Akciók",
+  "description": "Banggood, AliExpress és Geekbuying kuponok, akciók, magyar nyelvű terméktesztek és unboxing cikkek élő frissítéssel.",
   "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
     {
       "src": "favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
@@ -18,8 +25,11 @@
       "sizes": "512x512"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "orientation": "portrait-primary",
+  "theme_color": "#101114",
+  "background_color": "#08090b",
+  "lang": "hu",
+  "categories": ["shopping", "lifestyle", "utilities"]
 }

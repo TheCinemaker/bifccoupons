@@ -93,7 +93,118 @@ const SkeletonCard = () => (
   </div>
 );
 
-const CouponGrid = ({
+const DealDetailModal = ({ coupon, onClose, onCopyCode, isCopied, onSendToStudio, isAdmin }) => {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  if (!coupon) return null;
+
+  const secureImageUrl = coupon.image
+    ? coupon.image.replace('http://', 'https://')
+    : FALLBACK_IMAGE;
+
+  const price = parseDisplayPrice(coupon.price);
+
+  return (
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="admin-modal-card deal-detail-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Termék részletei</h3>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Bezárás">
+            &times;
+          </button>
+        </div>
+
+        <div className="deal-modal-body">
+          <div className="deal-modal-image-wrap">
+            <img
+              src={secureImageUrl}
+              alt={coupon.name}
+              className="deal-modal-img"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = FALLBACK_IMAGE;
+              }}
+            />
+            {coupon.source && <span className="badge-source">{coupon.source}</span>}
+            {coupon.warehouse && (
+              <span className="badge-warehouse">
+                <i className="dot" />
+                {coupon.warehouse}
+              </span>
+            )}
+          </div>
+
+          <h3 className="deal-modal-title">{coupon.name}</h3>
+
+          <div className="deal-modal-price-box">
+            <span className="price-label">Akciós Kuponos Ár</span>
+            <span className={`price-value ${price.soft ? 'is-soft' : ''}`}>
+              {price.value}
+              {price.currency && <span className="cur">{price.currency}</span>}
+            </span>
+          </div>
+
+          {coupon.code ? (
+            <button
+              type="button"
+              className={`btn-mac btn-copy-coupon-big ${isCopied ? 'is-copied' : 'btn-mac-primary'}`}
+              onClick={() => onCopyCode(coupon.code)}
+            >
+              {isCopied ? (
+                <>
+                  <IconCheck /> Kuponkód másolva a vágólapra! ({coupon.code})
+                </>
+              ) : (
+                <>
+                  <IconCopy /> Kuponkód másolása: <strong>{coupon.code}</strong>
+                </>
+              )}
+            </button>
+          ) : (
+            <div className="auto-discount-banner">
+              Automatikus kedvezmény (kuponkód nem szükséges)
+            </div>
+          )}
+
+          <div className="modal-actions mt-16">
+            {coupon.link && (
+              <a
+                href={coupon.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-mac btn-mac-primary w-full deal-modal-buy-btn"
+              >
+                Irány a bolt (Vásárlás)
+              </a>
+            )}
+
+            {isAdmin && (
+              <button
+                type="button"
+                className="btn-mac btn-mac-secondary w-full"
+                onClick={() => {
+                  onClose();
+                  onSendToStudio(coupon);
+                }}
+              >
+                Küldés a Deal Studio-ba
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const CouponGrid = ({
   coupons = [],
   loading = false,
   activeSheet,
@@ -105,6 +216,7 @@ const CouponGrid = ({
 }) => {
   const [copiedCode, setCopiedCode] = useState(null);
   const [visibleCount, setVisibleCount] = useState(36);
+  const [selectedDealModal, setSelectedDealModal] = useState(null);
 
   const STORE_TABS = [
     { label: 'Összes', key: 'Összes' },
@@ -271,6 +383,7 @@ const CouponGrid = ({
               key={`${coupon.source}-${index}`}
               className="coupon-card"
               style={{ animationDelay: `${Math.min(index, 11) * 28}ms` }}
+              onClick={() => setSelectedDealModal(coupon)}
             >
               <div className="card-image-wrapper">
                 <img
@@ -317,7 +430,10 @@ const CouponGrid = ({
                     <button
                       type="button"
                       className={`code-chip ${isCopied ? 'is-copied' : ''}`}
-                      onClick={() => handleCopyCode(coupon.code)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopyCode(coupon.code);
+                      }}
                       title="Kattints a kuponkód másolásához"
                     >
                       {isCopied ? <IconCheck /> : <IconCopy />}
@@ -335,6 +451,7 @@ const CouponGrid = ({
                       target="_blank"
                       rel="noopener noreferrer"
                       className="btn-card btn-view"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       Irány a bolt
                     </a>
@@ -343,7 +460,10 @@ const CouponGrid = ({
                   {isAdmin && (
                     <button
                       type="button"
-                      onClick={() => onSendToStudio(coupon)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSendToStudio(coupon);
+                      }}
                       className="btn-card btn-studio"
                       title="Küldés a Deal Studio generátorba"
                     >
@@ -362,11 +482,22 @@ const CouponGrid = ({
           <button
             type="button"
             className="btn-mac btn-mac-secondary load-more-btn"
-            onClick={() => setVisibleCount(prev => prev + 48)}
+            onClick={() => setVisibleCount(v => v + 48)}
           >
             További kuponok betöltése · még {filteredCoupons.length - visibleCount} db
           </button>
         </div>
+      )}
+
+      {selectedDealModal && (
+        <DealDetailModal
+          coupon={selectedDealModal}
+          onClose={() => setSelectedDealModal(null)}
+          onCopyCode={handleCopyCode}
+          isCopied={copiedCode === selectedDealModal.code && !!selectedDealModal.code}
+          onSendToStudio={onSendToStudio}
+          isAdmin={isAdmin}
+        />
       )}
     </div>
   );

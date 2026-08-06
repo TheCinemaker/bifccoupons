@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import defaultReviews from '../data/reviews.json';
 
+const REPO_OWNER = 'TheCinemaker';
+const REPO_NAME = 'bifccoupons';
+
 const ReviewsPage = ({ isAdmin }) => {
   const [reviews, setReviews] = useState([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
   const [copyNotice, setCopyNotice] = useState(false);
+  const [ghToken, setGhToken] = useState('');
+  const [syncStatus, setSyncStatus] = useState({ loading: false, message: '', isError: false });
+
   const [formData, setFormData] = useState({
     title: '',
     category: 'Elektronika',
@@ -19,11 +26,16 @@ const ReviewsPage = ({ isAdmin }) => {
 
   useEffect(() => {
     let isMounted = true;
+
+    const savedToken = localStorage.getItem('kinabolveddmeg_gh_token') || process.env.REACT_APP_GITHUB_TOKEN || '';
+    if (savedToken && isMounted) {
+      setGhToken(savedToken);
+    }
     
     const loadReviews = async () => {
       let initialData = defaultReviews;
       try {
-        const res = await fetch('/reviews.json');
+        const res = await fetch('/reviews.json?t=' + Date.now());
         if (res.ok) {
           const remoteJson = await res.json();
           if (Array.isArray(remoteJson) && remoteJson.length > 0) {
@@ -57,6 +69,79 @@ const ReviewsPage = ({ isAdmin }) => {
     };
   }, []);
 
+  const pushToGitHub = async (updatedReviews) => {
+    const token = ghToken || localStorage.getItem('kinabolveddmeg_gh_token') || process.env.REACT_APP_GITHUB_TOKEN;
+    if (!token) {
+      setSyncStatus({
+        loading: false,
+        message: 'Helyileg elmentve. A GitHubra automatikus feltöltéshez állítsd be a GitHub Tokent az Admin gombra kattintva!',
+        isError: false
+      });
+      return false;
+    }
+
+    setSyncStatus({ loading: true, message: 'JSON frissítése a GitHubon és Netlify build indítása…', isError: false });
+
+    try {
+      const jsonContent = JSON.stringify(updatedReviews, null, 2);
+      // utf8 safe base64
+      const base64Content = btoa(unescape(encodeURIComponent(jsonContent)));
+
+      const pathsToUpdate = [
+        'frontend/public/reviews.json',
+        'frontend/src/data/reviews.json'
+      ];
+
+      for (const path of pathsToUpdate) {
+        const getUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`;
+        const getRes = await fetch(getUrl, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        let sha = '';
+        if (getRes.ok) {
+          const fileData = await getRes.json();
+          sha = fileData.sha;
+        }
+
+        const putRes = await fetch(getUrl, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: `Update reviews.json via KÍNÁBÓLVEDDMEG Admin UI - Trigger Netlify Deploy`,
+            content: base64Content,
+            sha: sha || undefined,
+            branch: 'main'
+          })
+        });
+
+        if (!putRes.ok) {
+          const errData = await putRes.json();
+          throw new Error(errData.message || 'GitHub API hiba');
+        }
+      }
+
+      setSyncStatus({
+        loading: false,
+        message: 'Sikeres GitHub commit! A Netlify automatikusan elindította az új deploy-t.',
+        isError: false
+      });
+      setTimeout(() => setSyncStatus({ loading: false, message: '', isError: false }), 6000);
+      return true;
+    } catch (err) {
+      console.error('GitHub API error:', err);
+      setSyncStatus({
+        loading: false,
+        message: 'Helyileg elmentve! GitHub szinkron hiba: ' + err.message,
+        isError: true
+      });
+      return false;
+    }
+  };
+
   const saveReviews = (updated) => {
     setReviews(updated);
     try {
@@ -64,6 +149,7 @@ const ReviewsPage = ({ isAdmin }) => {
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
+    pushToGitHub(updated);
   };
 
   const handleAddReview = (e) => {
@@ -123,7 +209,6 @@ const ReviewsPage = ({ isAdmin }) => {
         saveReviews(parsed);
         setIsImportOpen(false);
         setImportJsonText('');
-        alert('Tesztek sikeresen importálva!');
       } else {
         alert('Érvénytelen JSON formátum! A JSON fájlnak egy tömbnek (array) kell lennie.');
       }
@@ -142,6 +227,17 @@ const ReviewsPage = ({ isAdmin }) => {
     reader.readAsText(file);
   };
 
+  const handleSaveToken = (e) => {
+    e.preventDefault();
+    try {
+      localStorage.setItem('kinabolveddmeg_gh_token', ghToken.trim());
+      setIsTokenModalOpen(false);
+      alert('GitHub Token elmentve! Ezentúl minden mentés automatikusan pushol a GitHubra és indítja a Netlify deployt.');
+    } catch (err) {
+      alert('Nem sikerült elmenteni a tokent.');
+    }
+  };
+
   return (
     <div className="reviews-page">
       <div className="reviews-header-banner">
@@ -156,6 +252,15 @@ const ReviewsPage = ({ isAdmin }) => {
               onClick={() => setIsFormOpen(true)}
             >
               Új teszt / unboxing hozzáadása
+            </button>
+
+            <button
+              type="button"
+              className="btn-mac btn-mac-secondary"
+              onClick={() => setIsTokenModalOpen(true)}
+              title="GitHub API Token beállítása az automatikus deployhoz"
+            >
+              {ghToken ? 'GitHub Token Beállítva' : 'GitHub Token Beállítása'}
             </button>
 
             <button
@@ -184,6 +289,13 @@ const ReviewsPage = ({ isAdmin }) => {
             >
               JSON importálása
             </button>
+          </div>
+        )}
+
+        {syncStatus.message && (
+          <div className={`status-banner mt-16 ${syncStatus.isError ? 'error' : 'info'}`}>
+            {syncStatus.loading && <span className="spinner" />}
+            <span>{syncStatus.message}</span>
           </div>
         )}
       </div>
@@ -287,7 +399,47 @@ const ReviewsPage = ({ isAdmin }) => {
                   Mégse
                 </button>
                 <button type="submit" className="btn-mac btn-mac-primary">
-                  Teszt Mentése
+                  Teszt Mentése & Automatikus Deploy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isTokenModalOpen && isAdmin && (
+        <div className="modal-overlay" onClick={() => setIsTokenModalOpen(false)}>
+          <div className="admin-modal-card review-form-card" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>GitHub API Token Beállítása</h3>
+              <button type="button" className="modal-close" onClick={() => setIsTokenModalOpen(false)} aria-label="Bezárás">
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveToken} className="admin-form">
+              <p className="admin-instruction">
+                Add meg a GitHub Personal Access Token-edet (PAT). Ennek segítségével a "Teszt Mentése" gomb automatikusan 
+                feltölti az új JSON-t a GitHub repóba, ami azonnal elindítja a Netlify deployt!
+              </p>
+
+              <div className="form-group">
+                <label>GitHub Personal Access Token (ghp_... vagy github_pat_...)</label>
+                <input 
+                  type="password" 
+                  value={ghToken} 
+                  onChange={e => setGhToken(e.target.value)}
+                  placeholder="ghp_..."
+                  className="mac-input"
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-mac btn-mac-secondary" onClick={() => setIsTokenModalOpen(false)}>
+                  Mégse
+                </button>
+                <button type="submit" className="btn-mac btn-mac-primary">
+                  Token Mentése
                 </button>
               </div>
             </form>
@@ -333,7 +485,7 @@ const ReviewsPage = ({ isAdmin }) => {
                   Mégse
                 </button>
                 <button type="submit" className="btn-mac btn-mac-primary">
-                  Importálás és mentés
+                  Importálás, Mentés & Deploy
                 </button>
               </div>
             </form>
@@ -401,4 +553,5 @@ const ReviewsPage = ({ isAdmin }) => {
 };
 
 export default ReviewsPage;
+
 

@@ -380,6 +380,10 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleAdminLogout = () => {
     setIsAdmin(false);
     setMobileMenuOpen(false);

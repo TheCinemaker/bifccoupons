@@ -49,8 +49,10 @@ const DealStudio = ({ initialDeal, availableCoupons = [] }) => {
 
   const [postText, setPostText] = useState('');
   const [commentText, setCommentText] = useState('');
+  const [fullPostText, setFullPostText] = useState('');
   const [copyPostSuccess, setCopyPostSuccess] = useState(false);
   const [copyCommentSuccess, setCopyCommentSuccess] = useState(false);
+  const [copyFullPostSuccess, setCopyFullPostSuccess] = useState(false);
   const [copyImageSuccess, setCopyImageSuccess] = useState(false);
 
   const canvasRef = useRef(null);
@@ -110,26 +112,36 @@ const DealStudio = ({ initialDeal, availableCoupons = [] }) => {
     if (editor) editor.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Generate post text and first comment
+  // Generate post text, first comment, and full complete post
   useEffect(() => {
     const formattedPrice = formatStudioPrice(deal.price, deal.source);
-    const formattedCode = deal.code ? deal.code : 'Automatikus kedvezmeny';
-    const formattedWarehouse = deal.warehouse ? deal.warehouse : 'EU Raktar';
+    const formattedCode = deal.code ? deal.code : 'Automatikus kedvezmény';
+    const formattedWarehouse = deal.warehouse ? deal.warehouse : 'EU Raktár';
 
-    const postBody = `AKCIOS AJANLAT!
-Termek: ${deal.name || ''}
-Akcios Ar: ${formattedPrice}
-Kuponkod: ${formattedCode}
-Raktar: ${formattedWarehouse}
+    const postBody = `AKCIÓS AJÁNLAT!
+Termék: ${deal.name || ''}
+Akciós Ár: ${formattedPrice}
+Kuponkód: ${formattedCode}
+Raktár: ${formattedWarehouse}
 
-A vasarlasi linket az elso kommentben talalod!
-#kinabolveddmeg #akcio #kupon #${(deal.source || 'akcio').toLowerCase().replace(/\s+/g, '')}`;
+A vásárlási linket az első kommentben találod!
+#kinabolveddmeg #akció #kupon #${(deal.source || 'akció').toLowerCase().replace(/\s+/g, '')}`;
 
-    const commentBody = `Vasarlasi link a kuponos arhoz:
+    const commentBody = `Vásárlási link a kuponos árhoz:
 ${deal.link || ''}`;
+
+    const fullBody = `AKCIÓS AJÁNLAT!
+Termék: ${deal.name || ''}
+Akciós Ár: ${formattedPrice}
+Kuponkód: ${formattedCode}
+Raktár: ${formattedWarehouse}
+Vásárlási link: ${deal.link || ''}
+
+#kinabolveddmeg #akció #kupon #${(deal.source || 'akció').toLowerCase().replace(/\s+/g, '')}`;
 
     setPostText(postBody);
     setCommentText(commentBody);
+    setFullPostText(fullBody);
   }, [deal]);
 
   // Canvas image generator
@@ -283,15 +295,27 @@ ${deal.link || ''}`;
   }, [deal]);
 
   const handleCopyPost = () => {
-    navigator.clipboard.writeText(postText);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(postText);
+    }
     setCopyPostSuccess(true);
     setTimeout(() => setCopyPostSuccess(false), 2000);
   };
 
   const handleCopyComment = () => {
-    navigator.clipboard.writeText(commentText);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(commentText);
+    }
     setCopyCommentSuccess(true);
     setTimeout(() => setCopyCommentSuccess(false), 2000);
+  };
+
+  const handleCopyFullPost = () => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(fullPostText);
+    }
+    setCopyFullPostSuccess(true);
+    setTimeout(() => setCopyFullPostSuccess(false), 2000);
   };
 
   const handleDownloadImage = () => {
@@ -546,6 +570,24 @@ ${deal.link || ''}`;
               onClick={handleCopyComment}
             >
               {copyCommentSuccess ? 'Komment másolva' : 'Első komment másolása'}
+            </button>
+          </div>
+
+          {/* Full complete post area */}
+          <div className="form-group mt-16">
+            <label className="form-label">Teljes poszt + link egyben (ha kommentbe vagy posztba teszed)</label>
+            <textarea
+              className="mac-input"
+              value={fullPostText}
+              readOnly
+              rows={8}
+            />
+            <button
+              type="button"
+              className={`btn-mac w-full mt-12 ${copyFullPostSuccess ? 'btn-mac-primary' : 'btn-mac-secondary'}`}
+              onClick={handleCopyFullPost}
+            >
+              {copyFullPostSuccess ? 'Teljes poszt másolva' : 'Teljes poszt másolása egyben'}
             </button>
           </div>
         </div>

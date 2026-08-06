@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1585515320310-259814833e62?auto=format&fit=crop&w=600&q=80';
@@ -155,6 +155,17 @@ const CouponGrid = ({
 
   const visibleCoupons = filteredCoupons.slice(0, visibleCount);
 
+  const latestUpdateTime = useMemo(() => {
+    let latest = '';
+    for (const c of filteredCoupons) {
+      if (c.updateTime && String(c.updateTime).trim()) {
+        const val = String(c.updateTime).trim();
+        if (val > latest) latest = val;
+      }
+    }
+    return latest;
+  }, [filteredCoupons]);
+
   return (
     <div className="coupon-grid-section">
       <div className="grid-toolbar">
@@ -206,6 +217,11 @@ const CouponGrid = ({
         <span>
           Megjelenítve <strong>{visibleCoupons.length}</strong> / <strong>{filteredCoupons.length}</strong> kupon
         </span>
+        {latestUpdateTime && (
+          <span className="update-time-badge" title="A szűrőben lévő kuponok legutóbbi frissítési ideje">
+            Frissítve: <strong>{latestUpdateTime}</strong>
+          </span>
+        )}
         {activeSheet !== 'Összes' && (
           <span className="active-filter-badge">Szűrő: {activeSheet}</span>
         )}

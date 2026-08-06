@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import defaultReviews from '../data/reviews.json';
 
-const REPO_OWNER = 'TheCinemaker';
-const REPO_NAME = 'bifccoupons';
-
 const ReviewsPage = ({ isAdmin }) => {
   const [reviews, setReviews] = useState([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
-  const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
   const [copyNotice, setCopyNotice] = useState(false);
-  const [ghToken, setGhToken] = useState('');
   const [syncStatus, setSyncStatus] = useState({ loading: false, message: '', isError: false });
 
   const [formData, setFormData] = useState({
@@ -26,11 +21,6 @@ const ReviewsPage = ({ isAdmin }) => {
 
   useEffect(() => {
     let isMounted = true;
-
-    const savedToken = localStorage.getItem('kinabolveddmeg_gh_token') || process.env.REACT_APP_GITHUB_TOKEN || '';
-    if (savedToken && isMounted) {
-      setGhToken(savedToken);
-    }
     
     const loadReviews = async () => {
       let initialData = defaultReviews;
@@ -70,74 +60,38 @@ const ReviewsPage = ({ isAdmin }) => {
   }, []);
 
   const pushToGitHub = async (updatedReviews) => {
-    const token = ghToken || localStorage.getItem('kinabolveddmeg_gh_token') || process.env.REACT_APP_GITHUB_TOKEN;
-    if (!token) {
-      setSyncStatus({
-        loading: false,
-        message: 'Helyileg elmentve. A GitHubra automatikus feltöltéshez állítsd be a GitHub Tokent az Admin gombra kattintva!',
-        isError: false
-      });
-      return false;
-    }
-
-    setSyncStatus({ loading: true, message: 'JSON frissítése a GitHubon és Netlify build indítása…', isError: false });
+    setSyncStatus({ loading: true, message: 'JSON mentése a GitHubra és Netlify deploy indítása…', isError: false });
 
     try {
-      const jsonContent = JSON.stringify(updatedReviews, null, 2);
-      // utf8 safe base64
-      const base64Content = btoa(unescape(encodeURIComponent(jsonContent)));
+      const res = await fetch('/api/save-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pin: '0169',
+          reviews: updatedReviews
+        })
+      });
 
-      const pathsToUpdate = [
-        'frontend/public/reviews.json',
-        'frontend/src/data/reviews.json'
-      ];
-
-      for (const path of pathsToUpdate) {
-        const getUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`;
-        const getRes = await fetch(getUrl, {
-          headers: { Authorization: `Bearer ${token}` }
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSyncStatus({
+          loading: false,
+          message: 'Sikeres mentés a GitHubra! A Netlify automatikusan elindította az új deploy-t.',
+          isError: false
         });
-
-        let sha = '';
-        if (getRes.ok) {
-          const fileData = await getRes.json();
-          sha = fileData.sha;
-        }
-
-        const putRes = await fetch(getUrl, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            message: `Update reviews.json via KÍNÁBÓLVEDDMEG Admin UI - Trigger Netlify Deploy`,
-            content: base64Content,
-            sha: sha || undefined,
-            branch: 'main'
-          })
-        });
-
-        if (!putRes.ok) {
-          const errData = await putRes.json();
-          throw new Error(errData.message || 'GitHub API hiba');
-        }
+        setTimeout(() => setSyncStatus({ loading: false, message: '', isError: false }), 6000);
+        return true;
+      } else {
+        throw new Error(data.error || 'Szerveroldali mentési hiba');
       }
-
+    } catch (err) {
+      console.log('Backend sync notice:', err.message);
       setSyncStatus({
         loading: false,
-        message: 'Sikeres GitHub commit! A Netlify automatikusan elindította az új deploy-t.',
+        message: 'Helyileg elmentve! (Központi mentéshez a Netlify környezeti változóban állítsd be a GITHUB_TOKEN-t)',
         isError: false
       });
       setTimeout(() => setSyncStatus({ loading: false, message: '', isError: false }), 6000);
-      return true;
-    } catch (err) {
-      console.error('GitHub API error:', err);
-      setSyncStatus({
-        loading: false,
-        message: 'Helyileg elmentve! GitHub szinkron hiba: ' + err.message,
-        isError: true
-      });
       return false;
     }
   };
@@ -225,17 +179,6 @@ const ReviewsPage = ({ isAdmin }) => {
       setImportJsonText(evt.target.result);
     };
     reader.readAsText(file);
-  };
-
-  const handleSaveToken = (e) => {
-    e.preventDefault();
-    try {
-      localStorage.setItem('kinabolveddmeg_gh_token', ghToken.trim());
-      setIsTokenModalOpen(false);
-      alert('GitHub Token elmentve! Ezentúl minden mentés automatikusan pushol a GitHubra és indítja a Netlify deployt.');
-    } catch (err) {
-      alert('Nem sikerült elmenteni a tokent.');
-    }
   };
 
   return (
